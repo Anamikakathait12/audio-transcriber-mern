@@ -1,0 +1,99 @@
+import dns from 'dns';
+dns.setServers(['8.8.8.8', '8.8.4.4']); 
+
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import multer from 'multer';
+import connectDB from './config/db.js';
+import transcriptRoutes from './routes/transcriptRoutes.js';
+
+// Load environment variables from .env
+dotenv.config();
+
+// Connect to MongoDB Atlas
+await connectDB();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Standard Middlewares
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+/**
+ * Health check route
+ * Used to verify server status from frontend or monitoring tools
+ */
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Audio to Text Transcriber API is healthy',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Transcript routes
+app.use('/api/transcripts', transcriptRoutes);
+
+// Fallback 404 handler for unknown routes
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Global error-handling middleware
+app.use((err, req, res, next) => {
+  console.error('API Error:', err.message || err);
+
+  // 1. Handle Multer-specific errors
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        error: 'File too large. Maximum allowed file size is 25 MB.',
+      });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        error: `Unexpected field '${err.field}'. Please upload audio using the form field name 'audio'.`,
+      });
+    }
+    return res.status(400).json({
+      error: `Upload error: ${err.message}`,
+    });
+  }
+
+  // 2. Handle invalid file type error from fileFilter
+  if (err.message && err.message.includes('Invalid file type')) {
+    return res.status(400).json({
+      error: err.message,
+    });
+  }
+
+  // 3. Handle Mongoose CastError (e.g., malformed ObjectId)
+  if (err.name === 'CastError') {
+    return res.status(400).json({
+      error: `Invalid format for field '${err.path}'`,
+    });
+  }
+
+  // 4. Handle Mongoose ValidationError
+  if (err.name === 'ValidationError') {
+    const messages = Object.values(err.errors).map((val) => val.message);
+    return res.status(400).json({
+      error: 'Validation failed',
+      details: messages,
+    });
+  }
+
+  // 5. Default generic error response
+  const statusCode = err.status || err.statusCode || 500;
+  return res.status(statusCode).json({
+    error: err.message || 'Internal Server Error',
+  });
+});
+
+// Start listening
+app.listen(PORT, () => {
+  console.log(`🚀 [Server] Running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
+});

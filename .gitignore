@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Secrets (NEVER commit these)
+.env
+.env.local
+
+# Uploaded audio temp files
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Build output
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

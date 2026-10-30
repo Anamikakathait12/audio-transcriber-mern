@@ -1,0 +1,22 @@
+{
+  "name": "audio-transcriber-server",
+  "version": "1.0.0",
+  "description": "Backend for Audio to Text Transcriber using Express, Groq Whisper API, and MongoDB Atlas",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.22.3",
+    "groq-sdk": "^0.15.0",
+    "mongoose": "^8.12.1",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
