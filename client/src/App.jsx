@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { checkHealth, uploadAudio } from './api/transcriptApi.js';
 import UploadBox from './components/UploadBox.jsx';
+import Recorder from './components/Recorder.jsx';
 import TranscriptResult from './components/TranscriptResult.jsx';
 import HistoryList from './components/HistoryList.jsx';
 
@@ -8,6 +9,9 @@ function App() {
   // Server Health State (from Step 1)
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'connected' | 'down'
   const [lastChecked, setLastChecked] = useState(null);
+
+  // Active Tab: 'upload' | 'record' (Step 5)
+  const [activeTab, setActiveTab] = useState('upload');
 
   // Transcription & Upload States (Step 3)
   const [currentTranscript, setCurrentTranscript] = useState(null);
@@ -45,7 +49,7 @@ function App() {
   }, []);
 
   /**
-   * Send audio file to backend for Whisper transcription
+   * Send audio file (uploaded or recorded) to backend for Whisper transcription
    */
   const handleUploadAudio = async (file) => {
     setBackendError(null);
@@ -65,7 +69,7 @@ function App() {
 
       if (response && response.data) {
         setCurrentTranscript(response.data);
-        // Automatically refresh history list when a new upload finishes (Step 4)
+        // Automatically refresh history list when a new transcription finishes (Steps 4 & 5)
         setHistoryRefreshTrigger((prev) => prev + 1);
       }
     } catch (err) {
@@ -179,14 +183,68 @@ function App() {
           </div>
         )}
 
-        {/* Audio Upload Box (Step 3) */}
-        <section aria-label="Upload Section">
-          <UploadBox
-            onUpload={handleUploadAudio}
-            isUploading={isUploading}
-            isTranscribing={isTranscribing}
-            uploadProgress={uploadProgress}
-          />
+        {/* Step 5: Mode Selector Tabs (Upload file | Record audio) */}
+        <div className="flex items-center justify-center mb-6">
+          <div className="flex bg-slate-800/90 p-1 rounded-2xl border border-slate-700/80 shadow-md">
+            <button
+              type="button"
+              onClick={() => setActiveTab('upload')}
+              className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                activeTab === 'upload'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                />
+              </svg>
+              <span>Upload file</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('record')}
+              className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                activeTab === 'record'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                />
+              </svg>
+              <span>Record audio</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Input Section: Upload Box OR Live Mic Recorder */}
+        <section aria-label="Input Section">
+          {activeTab === 'upload' ? (
+            <UploadBox
+              onUpload={handleUploadAudio}
+              isUploading={isUploading}
+              isTranscribing={isTranscribing}
+              uploadProgress={uploadProgress}
+            />
+          ) : (
+            <Recorder
+              onUpload={handleUploadAudio}
+              isUploading={isUploading}
+              isTranscribing={isTranscribing}
+              uploadProgress={uploadProgress}
+            />
+          )}
         </section>
 
         {/* Current Transcription Output Display (Step 3) */}
@@ -208,7 +266,7 @@ function App() {
 
       {/* Subtle Footer */}
       <footer className="text-center text-xs text-slate-500 mt-12">
-        <p>Audio to Text Transcriber &bull; MERN Stack Step 4 &bull; Whisper Large v3</p>
+        <p>Audio to Text Transcriber &bull; MERN Stack Step 5 &bull; Whisper Large v3</p>
       </footer>
     </div>
   );

@@ -28,8 +28,15 @@ speech-to-text/
 │
 ├── client/
 │   ├── src/
-│   │   ├── App.jsx               # React dashboard & health check verification
-│   │   ├── index.css             # Tailwind CSS directives
+│   │   ├── api/
+│   │   │   └── transcriptApi.js  # Axios client with upload, fetch, & delete
+│   │   ├── components/
+│   │   │   ├── HistoryList.jsx   # Searchable & paginated transcript history
+│   │   │   ├── Recorder.jsx      # Live microphone recorder with preview & timer
+│   │   │   ├── TranscriptResult.jsx # Full transcript viewer, copy & download
+│   │   │   └── UploadBox.jsx     # Drag-and-drop audio uploader with validation
+│   │   ├── App.jsx               # Dashboard, tab switcher & health indicator
+│   │   ├── index.css             # Tailwind CSS directives & animations
 │   │   └── main.jsx              # React DOM root entry
 │   ├── index.html                # Vite HTML shell
 │   ├── package.json              # Client dependencies & scripts
@@ -252,4 +259,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 2:** Backend audio transcription API (Multer, Groq `whisper-large-v3`, Mongoose schema, CRUD routes).
 - [x] **Step 3:** Frontend UI (Drag-and-drop audio uploader, client validation, progress/transcribing states, copy/download buttons, backend error alert).
 - [x] **Step 4:** Transcript history (Search with debounce, pagination, expand/collapse, copy/download with UTF-8 BOM for Hindi & non-English, delete confirmation, auto-refresh on new upload).
+- [x] **Step 5:** Live mic recording (MediaRecorder, timer & pulsing indicator, audio preview player, auto-stop at 5 min, hardware track release, tab switcher).
 
