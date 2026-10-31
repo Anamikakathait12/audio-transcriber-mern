@@ -74,6 +74,7 @@ Before running the application, make sure you have:
 1. **Node.js** (v18.0.0 or higher) and **npm** installed.
 2. A free **[MongoDB Atlas](https://www.mongodb.com/cloud/atlas)** cluster connection string.
 3. A free **[Groq Cloud API Key](https://console.groq.com/keys)**.
+4. An optional free **[AssemblyAI API Key](https://www.assemblyai.com)** (for speaker diarization).
 
 ---
 
@@ -102,6 +103,7 @@ Before running the application, make sure you have:
    PORT=5000
    MONGO_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/audio_transcriber?retryWrites=true&w=majority
    GROQ_API_KEY=gsk_your_groq_api_key_here
+   ASSEMBLY_API_KEY=your_assemblyai_api_key_here
    ```
 
 4. Start the backend development server:

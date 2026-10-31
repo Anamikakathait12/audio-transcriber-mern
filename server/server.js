@@ -1,5 +1,5 @@
 import dns from 'dns';
-dns.setServers(['8.8.8.8', '8.8.4.4']); 
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 import express from 'express';
 import cors from 'cors';
@@ -18,7 +18,23 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Standard Middlewares
-app.use(cors());
+// Allow only the local dev client and the deployed frontend
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.CLIENT_URL, // set this in Render, e.g. https://audio-transcriber-mern.vercel.app
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (Postman, curl, health checks)
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

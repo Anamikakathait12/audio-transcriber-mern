@@ -37,10 +37,10 @@ const mapSpeakerLabelToNumber = (speaker) => {
  * @returns {Promise<{ text: string, language: string, duration: number|null, segments: Array<{ speaker: number, text: string, start: number, end: number }> }>}
  */
 export const diarizeAudio = async (filePath, language = 'hi') => {
-  const apiKey = process.env.ASSEMBLYAI_API_KEY;
+  const apiKey = process.env.ASSEMBLY_API_KEY;
 
   if (!apiKey || apiKey.trim() === '') {
-    throw new Error('ASSEMBLYAI_API_KEY is missing. Please add your AssemblyAI API key to server/.env.');
+    throw new Error('ASSEMBLY_API_KEY is missing. Please add your AssemblyAI API key to server/.env.');
   }
 
   // 1. Read binary audio buffer from disk
@@ -58,7 +58,7 @@ export const diarizeAudio = async (filePath, language = 'hi') => {
 
   if (!uploadResponse.ok) {
     if (uploadResponse.status === 401) {
-      throw new Error('Invalid AssemblyAI API Key. Please verify your ASSEMBLYAI_API_KEY in server/.env.');
+      throw new Error('Invalid AssemblyAI API Key. Please verify your ASSEMBLY_API_KEY in server/.env.');
     }
     const errText = await uploadResponse.text();
     throw new Error(`Failed to upload audio to AssemblyAI: ${errText || uploadResponse.statusText}`);
@@ -85,7 +85,7 @@ export const diarizeAudio = async (filePath, language = 'hi') => {
 
   if (!transcriptResponse.ok) {
     if (transcriptResponse.status === 401) {
-      throw new Error('Invalid AssemblyAI API Key. Please verify your ASSEMBLYAI_API_KEY in server/.env.');
+      throw new Error('Invalid AssemblyAI API Key. Please verify your ASSEMBLY_API_KEY in server/.env.');
     }
     const errData = await transcriptResponse.json().catch(() => ({}));
     const message = errData.error || errData.message || transcriptResponse.statusText;
