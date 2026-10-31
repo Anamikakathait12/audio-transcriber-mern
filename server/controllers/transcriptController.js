@@ -2,10 +2,11 @@ import fs from 'fs/promises';
 import mongoose from 'mongoose';
 import Transcript from '../models/Transcript.js';
 import { transcribeAudio } from '../services/transcribeService.js';
+import { diarizeAudio } from '../services/diarizeService.js';
 
 /**
- * Upload and transcribe an audio file, persist transcript to MongoDB,
- * and clean up temporary uploaded file in all scenarios.
+ * Upload and transcribe an audio file with optional speaker diarization,
+ * persist transcript to MongoDB, and clean up temporary uploaded file.
  * POST /api/transcripts
  */
 export const transcribe = async (req, res, next) => {
@@ -17,28 +18,48 @@ export const transcribe = async (req, res, next) => {
     });
   }
 
-  try {
-    // 1. Send file to Whisper service
-    const transcriptionResult = await transcribeAudio(file.path);
+  // Check if caller requested speaker detection
+  const shouldDetectSpeakers =
+    req.body?.detectSpeakers === 'true' || req.body?.detectSpeakers === true;
+  const targetLanguage = req.body?.language || 'hi';
 
-    // 2. Save transcript record in MongoDB
+  try {
+    let result;
+    let segments;
+    let speakerCount;
+
+    if (shouldDetectSpeakers) {
+      // Step 6: Use AssemblyAI for speaker diarization
+      result = await diarizeAudio(file.path, targetLanguage);
+      segments = result.segments || [];
+      const uniqueSpeakers = new Set(segments.map((s) => s.speaker));
+      speakerCount = uniqueSpeakers.size || 1;
+    } else {
+      // Default: Use Groq Whisper Large v3
+      result = await transcribeAudio(file.path);
+    }
+
+    // Persist transcript record in MongoDB
     const newTranscript = await Transcript.create({
-      text: transcriptionResult.text,
+      text: result.text,
       originalFileName: file.originalname,
       fileSize: file.size,
-      language: transcriptionResult.language,
-      duration: transcriptionResult.duration,
+      language: result.language,
+      duration: result.duration,
+      segments: segments && segments.length > 0 ? segments : undefined,
+      speakerCount: speakerCount !== undefined ? speakerCount : undefined,
     });
 
-    // 3. Return created record
     return res.status(201).json({
-      message: 'Audio transcribed and saved successfully',
+      message: shouldDetectSpeakers
+        ? 'Audio transcribed with speaker detection and saved successfully'
+        : 'Audio transcribed and saved successfully',
       data: newTranscript,
     });
   } catch (error) {
     next(error);
   } finally {
-    // 4. Always remove the temporary uploaded file from the server disk
+    // Always remove the temporary uploaded file from the server disk
     if (file?.path) {
       try {
         await fs.unlink(file.path);

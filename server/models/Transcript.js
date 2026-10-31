@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 /**
  * Mongoose Schema for audio transcripts.
- * Stores transcription text, metadata, and creation timestamp.
+ * Stores transcription text, metadata, speaker segments, and creation timestamp.
  */
 const transcriptSchema = new mongoose.Schema(
   {
@@ -26,6 +26,21 @@ const transcriptSchema = new mongoose.Schema(
       type: Number, // Duration in seconds
       required: false,
     },
+    // Optional speaker diarization segments (Step 6)
+    segments: [
+      {
+        speaker: { type: Number, required: true },
+        text: { type: String, required: true, trim: true },
+        start: { type: Number, required: true },
+        end: { type: Number, required: true },
+        _id: false,
+      },
+    ],
+    // Optional total unique speakers detected
+    speakerCount: {
+      type: Number,
+      required: false,
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -39,4 +54,3 @@ const transcriptSchema = new mongoose.Schema(
 const Transcript = mongoose.model('Transcript', transcriptSchema);
 
 export default Transcript;
-

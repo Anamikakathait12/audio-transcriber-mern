@@ -20,6 +20,7 @@ speech-to-text/
 │   ├── routes/
 │   │   └── transcriptRoutes.js   # /api/transcripts routing
 │   ├── services/
+│   │   ├── diarizeService.js     # AssemblyAI speaker diarization client
 │   │   └── transcribeService.js  # Isolated Groq Whisper API client
 │   ├── uploads/                  # Temporary file processing directory
 │   ├── .env.example              # Environment variables template
@@ -260,4 +261,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 3:** Frontend UI (Drag-and-drop audio uploader, client validation, progress/transcribing states, copy/download buttons, backend error alert).
 - [x] **Step 4:** Transcript history (Search with debounce, pagination, expand/collapse, copy/download with UTF-8 BOM for Hindi & non-English, delete confirmation, auto-refresh on new upload).
 - [x] **Step 5:** Live mic recording (MediaRecorder, timer & pulsing indicator, audio preview player, auto-stop at 5 min, hardware track release, tab switcher).
+- [x] **Step 6:** Speaker detection (AssemblyAI diarization, speaker labels 1-N, start/end timestamps, chat-style view, multi-speaker badges & exports).
 

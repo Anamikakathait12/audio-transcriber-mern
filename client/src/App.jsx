@@ -49,23 +49,27 @@ function App() {
   }, []);
 
   /**
-   * Send audio file (uploaded or recorded) to backend for Whisper transcription
+   * Send audio file (uploaded or recorded) to backend for transcription or speaker diarization
    */
-  const handleUploadAudio = async (file) => {
+  const handleUploadAudio = async (file, options = {}) => {
     setBackendError(null);
     setIsUploading(true);
     setIsTranscribing(false);
     setUploadProgress(0);
 
     try {
-      const response = await uploadAudio(file, (percent) => {
-        setUploadProgress(percent);
-        // Once the upload reaches 100%, backend starts the Whisper transcription
-        if (percent >= 100) {
-          setIsUploading(false);
-          setIsTranscribing(true);
-        }
-      });
+      const response = await uploadAudio(
+        file,
+        (percent) => {
+          setUploadProgress(percent);
+          // Once the upload reaches 100%, backend starts the AI transcription/diarization
+          if (percent >= 100) {
+            setIsUploading(false);
+            setIsTranscribing(true);
+          }
+        },
+        options
+      );
 
       if (response && response.data) {
         setCurrentTranscript(response.data);
@@ -266,7 +270,7 @@ function App() {
 
       {/* Subtle Footer */}
       <footer className="text-center text-xs text-slate-500 mt-12">
-        <p>Audio to Text Transcriber &bull; MERN Stack Step 5 &bull; Whisper Large v3</p>
+        <p>Audio to Text Transcriber &bull; MERN Stack Step 6 &bull; Groq Whisper & AssemblyAI Diarization</p>
       </footer>
     </div>
   );

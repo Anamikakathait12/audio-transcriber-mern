@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getTranscripts, deleteTranscript } from '../api/transcriptApi.js';
 
 /**
@@ -11,6 +11,52 @@ const formatDuration = (seconds) => {
   const secs = totalSeconds % 60;
   if (mins === 0) return `${secs}s`;
   return `${mins}m ${secs}s`;
+};
+
+/**
+ * Format seconds into mm:ss timestamp
+ */
+const formatTimestamp = (seconds) => {
+  if (seconds === undefined || seconds === null) return '00:00';
+  const total = Math.floor(seconds);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+};
+
+/**
+ * Color palettes for speakers (matches TranscriptResult)
+ */
+const SPEAKER_THEMES = [
+  {
+    avatar: 'bg-indigo-600 text-white',
+    bubble: 'bg-indigo-950/40 border-indigo-800/60 text-indigo-100',
+  },
+  {
+    avatar: 'bg-emerald-600 text-white',
+    bubble: 'bg-emerald-950/40 border-emerald-800/60 text-emerald-100',
+  },
+  {
+    avatar: 'bg-purple-600 text-white',
+    bubble: 'bg-purple-950/40 border-purple-800/60 text-purple-100',
+  },
+  {
+    avatar: 'bg-amber-600 text-white',
+    bubble: 'bg-amber-950/40 border-amber-800/60 text-amber-100',
+  },
+  {
+    avatar: 'bg-cyan-600 text-white',
+    bubble: 'bg-cyan-950/40 border-cyan-800/60 text-cyan-100',
+  },
+  {
+    avatar: 'bg-rose-600 text-white',
+    bubble: 'bg-rose-950/40 border-rose-800/60 text-rose-100',
+  },
+];
+
+const getSpeakerTheme = (speakerNum) => {
+  const index = (Math.max(1, Number(speakerNum) || 1) - 1) % SPEAKER_THEMES.length;
+  return SPEAKER_THEMES[index];
 };
 
 /**
@@ -29,9 +75,21 @@ const formatDate = (dateString) => {
 };
 
 /**
+ * Generate formatted export text (including speaker labels if segments exist)
+ */
+const getFormattedItemText = (item) => {
+  if (item.segments && item.segments.length > 0) {
+    return item.segments
+      .map((seg) => `Speaker ${seg.speaker}: ${seg.text}`)
+      .join('\n\n');
+  }
+  return item.text || '';
+};
+
+/**
  * HistoryList Component
  * Displays searchable, paginated transcription history with expandable items,
- * copy/download actions (with UTF-8 BOM for Hindi & non-English fidelity), and deletion.
+ * speaker badges & chat-style diarization view, copy/download actions, and deletion.
  */
 function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
   const [transcripts, setTranscripts] = useState([]);
@@ -100,21 +158,22 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
    */
   const handleToggleExpand = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
-    // Reset any pending delete confirmation on toggle
     if (deletingId && deletingId !== id) {
       setDeletingId(null);
     }
   };
 
   /**
-   * Copy transcript text to clipboard
+   * Copy transcript text to clipboard (including speaker labels if diarized)
    */
-  const handleCopy = async (e, text, id) => {
+  const handleCopy = async (e, item) => {
     e.stopPropagation();
-    if (!text) return;
+    const exportText = getFormattedItemText(item);
+    if (!exportText) return;
+
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
+      await navigator.clipboard.writeText(exportText);
+      setCopiedId(item._id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       console.error('Copy failed:', err);
@@ -124,18 +183,18 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
   /**
    * Download transcript as a UTF-8 encoded .txt file (with BOM for Hindi / Devanagari fidelity)
    */
-  const handleDownload = (e, text, fileName) => {
+  const handleDownload = (e, item) => {
     e.stopPropagation();
-    if (!text) return;
+    const exportText = getFormattedItemText(item);
+    if (!exportText) return;
 
-    // Prepended \uFEFF Byte Order Mark ensures Windows Notepad, macOS TextEdit,
-    // and Linux editors render Hindi, Arabic, and other Unicode scripts correctly.
-    const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
+    // Prepended \uFEFF Byte Order Mark ensures Windows Notepad renders Hindi and non-Latin scripts correctly
+    const blob = new Blob(['\uFEFF' + exportText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
 
-    const cleanBaseName = fileName
-      ? fileName.replace(/\.[^/.]+$/, '')
+    const cleanBaseName = item.originalFileName
+      ? item.originalFileName.replace(/\.[^/.]+$/, '')
       : 'audio-transcript';
 
     link.href = url;
@@ -157,10 +216,8 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
       setDeletingId(null);
       if (expandedId === id) setExpandedId(null);
 
-      // Notify parent if needed
       if (onTranscriptDeleted) onTranscriptDeleted(id);
 
-      // If last item on current page was deleted, move back a page
       if (transcripts.length === 1 && page > 1) {
         setPage((prev) => prev - 1);
       } else {
@@ -281,6 +338,9 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
           {transcripts.map((item) => {
             const isExpanded = expandedId === item._id;
             const isPendingDelete = deletingId === item._id;
+            const hasSegments = Array.isArray(item.segments) && item.segments.length > 0;
+            const detectedSpeakers = item.speakerCount || (hasSegments ? new Set(item.segments.map((s) => s.speaker)).size : 0);
+
             const textPreview = item.text
               ? item.text.length > 100
                 ? `${item.text.slice(0, 100).trim()}...`
@@ -304,6 +364,14 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
                     <span className="font-semibold text-sm text-slate-100 truncate">
                       {item.originalFileName || 'Untitled Audio'}
                     </span>
+
+                    {/* Step 6: Small Speaker Count Badge */}
+                    {hasSegments && detectedSpeakers > 0 && (
+                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-semibold flex items-center space-x-1 flex-shrink-0">
+                        <span>👥</span>
+                        <span>{detectedSpeakers} {detectedSpeakers === 1 ? 'speaker' : 'speakers'}</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center space-x-2 text-xs text-slate-400 flex-shrink-0">
@@ -321,7 +389,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
                   </div>
                 </div>
 
-                {/* Collapsed Preview: ~100 chars (preserves Hindi & Unicode characters correctly) */}
+                {/* Collapsed Preview: ~100 chars (preserves Hindi & Unicode characters) */}
                 {!isExpanded && (
                   <p className="mt-2.5 text-xs text-slate-300 leading-relaxed break-words font-sans selection:bg-indigo-500">
                     {textPreview}
@@ -331,10 +399,43 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
                 {/* Expanded Full View */}
                 {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-slate-800 space-y-4 animate-fadeIn">
-                    {/* Full Transcript Text Box */}
-                    <div className="p-4 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans break-words max-h-80 overflow-y-auto selection:bg-indigo-500 selection:text-white">
-                      {item.text}
-                    </div>
+                    {/* Chat-style Segments OR Full Plain Text Box */}
+                    {hasSegments ? (
+                      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                        {item.segments.map((seg, sIdx) => {
+                          const theme = getSpeakerTheme(seg.speaker);
+                          return (
+                            <div
+                              key={sIdx}
+                              className={`p-3.5 rounded-xl border ${theme.bubble}`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center space-x-2">
+                                  <div
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${theme.avatar}`}
+                                  >
+                                    S{seg.speaker}
+                                  </div>
+                                  <span className="text-xs font-bold text-white">
+                                    Speaker {seg.speaker}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-800">
+                                  {formatTimestamp(seg.start)} - {formatTimestamp(seg.end)}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-wrap break-words pl-7 selection:bg-indigo-500">
+                                {seg.text}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans break-words max-h-80 overflow-y-auto selection:bg-indigo-500 selection:text-white">
+                        {item.text}
+                      </div>
+                    )}
 
                     {/* Action Toolbar */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -342,12 +443,13 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={(e) => handleCopy(e, item.text, item._id)}
+                          onClick={(e) => handleCopy(e, item)}
                           className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center space-x-1.5 ${
                             copiedId === item._id
                               ? 'bg-emerald-600 border-emerald-500 text-white'
                               : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'
                           }`}
+                          title="Copy text with speaker labels"
                         >
                           {copiedId === item._id ? (
                             <>
@@ -368,9 +470,9 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
 
                         <button
                           type="button"
-                          onClick={(e) => handleDownload(e, item.text, item.originalFileName)}
+                          onClick={(e) => handleDownload(e, item)}
                           className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all flex items-center space-x-1.5"
-                          title="Download UTF-8 .txt"
+                          title="Download UTF-8 .txt with speaker labels"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -483,4 +585,3 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
 }
 
 export default HistoryList;
-

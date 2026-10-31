@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 
-// Max file size: 25 MB (matches Groq's API restriction)
+// Max file size: 25 MB (matches Groq's & AssemblyAI's free limits)
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.webm', '.ogg', '.oga', '.opus'];
 const ALLOWED_MIME_PREFIXES = ['audio/'];
@@ -19,12 +19,13 @@ const formatFileSize = (bytes) => {
 /**
  * UploadBox Component
  * Drag-and-drop audio uploader with client-side validation, progress tracking,
- * and transcription status indicator.
+ * speaker detection toggle, and transcription status indicator.
  */
 function UploadBox({ onUpload, isUploading, isTranscribing, uploadProgress }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [validationError, setValidationError] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [detectSpeakers, setDetectSpeakers] = useState(false);
   const fileInputRef = useRef(null);
 
   /**
@@ -114,7 +115,7 @@ function UploadBox({ onUpload, isUploading, isTranscribing, uploadProgress }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!selectedFile || isUploading || isTranscribing) return;
-    onUpload(selectedFile);
+    onUpload(selectedFile, { detectSpeakers });
   };
 
   const isBusy = isUploading || isTranscribing;
@@ -233,12 +234,61 @@ function UploadBox({ onUpload, isUploading, isTranscribing, uploadProgress }) {
         </div>
       )}
 
+      {/* Step 6: Speaker Detection Toggle */}
+      <div className="mt-5 p-4 rounded-xl bg-slate-900/60 border border-slate-700/60">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
+            <div>
+              <span className="text-sm font-semibold text-slate-200">
+                Detect speakers
+              </span>
+              <p className="text-xs text-amber-400/90 mt-0.5">
+                Speaker detection is slower and uses limited credits.
+              </p>
+            </div>
+          </div>
+
+          {/* Toggle Switch */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={detectSpeakers}
+            onClick={() => setDetectSpeakers(!detectSpeakers)}
+            disabled={isBusy}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+              detectSpeakers ? 'bg-indigo-600' : 'bg-slate-700'
+            } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                detectSpeakers ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
       {/* Upload & Transcription Progress Indicator */}
       {isBusy && (
         <div className="mt-5 space-y-2">
           <div className="flex justify-between items-center text-xs font-semibold">
             <span className="text-indigo-300">
-              {isTranscribing ? 'Transcribing with Whisper AI...' : `Uploading audio: ${uploadProgress}%`}
+              {isTranscribing
+                ? detectSpeakers
+                  ? 'Detecting speakers with AssemblyAI...'
+                  : 'Transcribing with Whisper AI...'
+                : `Uploading audio: ${uploadProgress}%`}
             </span>
             <span className="text-slate-400">
               {isTranscribing ? 'Processing...' : `${uploadProgress}%`}
@@ -268,7 +318,11 @@ function UploadBox({ onUpload, isUploading, isTranscribing, uploadProgress }) {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              <span>Groq Whisper is transcribing your audio...</span>
+              <span>
+                {detectSpeakers
+                  ? 'AssemblyAI is identifying speakers and transcribing...'
+                  : 'Groq Whisper is transcribing your audio...'}
+              </span>
             </div>
           )}
         </div>
@@ -292,14 +346,16 @@ function UploadBox({ onUpload, isUploading, isTranscribing, uploadProgress }) {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              <span>{isTranscribing ? 'Transcribing...' : 'Uploading...'}</span>
+              <span>{isTranscribing ? 'Processing...' : 'Uploading...'}</span>
             </>
           ) : (
             <>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
-              <span>Transcribe Audio</span>
+              <span>
+                {detectSpeakers ? 'Transcribe & Detect Speakers' : 'Transcribe Audio'}
+              </span>
             </>
           )}
         </button>

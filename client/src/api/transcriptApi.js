@@ -6,20 +6,28 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 // Create a pre-configured Axios client instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 2-minute timeout for large audio files
+  timeout: 300000, // 5-minute timeout for diarization & large files
 });
 
 /**
- * Upload an audio file for Whisper transcription.
+ * Upload an audio file for transcription or speaker diarization.
  * 
  * @param {File} file - Audio file object from input or dropzone
  * @param {Function} [onProgress] - Optional upload progress callback (percent: number)
+ * @param {Object} [options] - Options { detectSpeakers: boolean, language: string }
  * @returns {Promise<Object>} Created transcript object
  */
-export const uploadAudio = async (file, onProgress) => {
+export const uploadAudio = async (file, onProgress, options = {}) => {
   const formData = new FormData();
   // Field name MUST match multer backend config: "audio"
   formData.append('audio', file);
+
+  if (options?.detectSpeakers) {
+    formData.append('detectSpeakers', 'true');
+  }
+  if (options?.language) {
+    formData.append('language', options.language);
+  }
 
   const response = await apiClient.post('/transcripts', formData, {
     headers: {

@@ -15,7 +15,7 @@ const formatTimer = (seconds) => {
 /**
  * Recorder Component
  * Live microphone recording with live timer, pulsing indicator, audio player preview,
- * auto-stop safeguard, clean track release, and error handling.
+ * speaker detection toggle, auto-stop safeguard, clean track release, and error handling.
  */
 function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
   // 'idle' | 'recording' | 'recorded'
@@ -24,6 +24,7 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [detectSpeakers, setDetectSpeakers] = useState(false);
 
   // Native Web Audio and timer refs
   const mediaRecorderRef = useRef(null);
@@ -210,7 +211,7 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
       lastModified: Date.now(),
     });
 
-    onUpload(file);
+    onUpload(file, { detectSpeakers });
   };
 
   const isBusy = isUploading || isTranscribing;
@@ -268,6 +269,37 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
             <p className="text-xs text-slate-400 mt-1 max-w-sm">
               Click Start to begin speaking. Recording automatically limits to 5 minutes to stay within limits.
             </p>
+          </div>
+
+          {/* Speaker Detection Toggle */}
+          <div className="w-full max-w-md p-3.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-left my-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-slate-200">
+                  Detect speakers
+                </span>
+                <p className="text-[11px] text-amber-400/90 mt-0.5">
+                  Speaker detection is slower and uses limited credits.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={detectSpeakers}
+                onClick={() => setDetectSpeakers(!detectSpeakers)}
+                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  detectSpeakers ? 'bg-indigo-600' : 'bg-slate-700'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    detectSpeakers ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           <button
@@ -352,12 +384,48 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
             </div>
           )}
 
+          {/* Speaker Detection Toggle */}
+          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-left">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-slate-200">
+                  Detect speakers
+                </span>
+                <p className="text-[11px] text-amber-400/90 mt-0.5">
+                  Speaker detection is slower and uses limited credits.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={detectSpeakers}
+                onClick={() => setDetectSpeakers(!detectSpeakers)}
+                disabled={isBusy}
+                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  detectSpeakers ? 'bg-indigo-600' : 'bg-slate-700'
+                } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    detectSpeakers ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {/* Upload & Transcription Progress Bar (During transcription) */}
           {isBusy && (
             <div className="space-y-2 pt-2">
               <div className="flex justify-between items-center text-xs font-semibold">
                 <span className="text-indigo-300">
-                  {isTranscribing ? 'Transcribing with Whisper AI...' : `Uploading recording: ${uploadProgress}%`}
+                  {isTranscribing
+                    ? detectSpeakers
+                      ? 'Detecting speakers with AssemblyAI...'
+                      : 'Transcribing with Whisper AI...'
+                    : `Uploading recording: ${uploadProgress}%`}
                 </span>
                 <span className="text-slate-400">
                   {isTranscribing ? 'Processing...' : `${uploadProgress}%`}
@@ -386,7 +454,11 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>Groq Whisper is transcribing your recording...</span>
+                  <span>
+                    {detectSpeakers
+                      ? 'AssemblyAI is identifying speakers and transcribing...'
+                      : 'Groq Whisper is transcribing your recording...'}
+                  </span>
                 </div>
               )}
             </div>
@@ -419,14 +491,16 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>{isTranscribing ? 'Transcribing...' : 'Uploading...'}</span>
+                  <span>{isTranscribing ? 'Processing...' : 'Uploading...'}</span>
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
-                  <span>Transcribe Recording</span>
+                  <span>
+                    {detectSpeakers ? 'Transcribe & Detect Speakers' : 'Transcribe Recording'}
+                  </span>
                 </>
               )}
             </button>
@@ -438,4 +512,3 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
 }
 
 export default Recorder;
-
