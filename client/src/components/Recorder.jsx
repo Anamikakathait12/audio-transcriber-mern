@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Mic, Square, Trash2, Check, AlertCircle, Loader2, Users, Volume2 } from 'lucide-react';
 
 // Maximum recording duration: 5 minutes (300 seconds) to stay well under 25 MB limit
 const MAX_RECORDING_SECONDS = 300;
@@ -14,17 +15,27 @@ const formatTimer = (seconds) => {
 
 /**
  * Recorder Component
- * Live microphone recording with live timer, pulsing indicator, audio player preview,
+ * Light-theme live microphone recording with live timer, pulsing indicator, audio player preview,
  * speaker detection toggle, auto-stop safeguard, clean track release, and error handling.
  */
-function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
+function Recorder({
+  onUpload,
+  isUploading,
+  isTranscribing,
+  uploadProgress,
+  detectSpeakers: externalDetectSpeakers,
+  setDetectSpeakers: externalSetDetectSpeakers,
+}) {
   // 'idle' | 'recording' | 'recorded'
   const [recordingState, setRecordingState] = useState('idle');
   const [duration, setDuration] = useState(0);
   const [recordedBlob, setRecordedBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
-  const [detectSpeakers, setDetectSpeakers] = useState(false);
+  const [internalDetectSpeakers, setInternalDetectSpeakers] = useState(false);
+
+  const detectSpeakers = externalDetectSpeakers !== undefined ? externalDetectSpeakers : internalDetectSpeakers;
+  const setDetectSpeakers = externalSetDetectSpeakers !== undefined ? externalSetDetectSpeakers : setInternalDetectSpeakers;
 
   // Native Web Audio and timer refs
   const mediaRecorderRef = useRef(null);
@@ -151,7 +162,7 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
 
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setErrorMessage(
-          'Microphone permission was denied. Please allow microphone access in your browser site settings and try again.'
+          'Microphone permission was denied. Please allow microphone access in your browser settings and try again.'
         );
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         setErrorMessage(
@@ -174,337 +185,251 @@ function Recorder({ onUpload, isUploading, isTranscribing, uploadProgress }) {
       timerIntervalRef.current = null;
     }
 
-    if (
-      mediaRecorderRef.current &&
-      mediaRecorderRef.current.state !== 'inactive'
-    ) {
-      mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.error('Error stopping MediaRecorder:', err);
+      }
     }
   };
 
   /**
-   * Discard current recording and reset back to idle
+   * Discard current recording and reset to idle
    */
   const handleDiscardRecording = () => {
-    if (audioUrl) {
-      URL.revokeObjectURL(audioUrl);
-      setAudioUrl(null);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
     }
+    stopMediaTracks();
+
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+
     setRecordedBlob(null);
+    setAudioUrl(null);
     setDuration(0);
     setRecordingState('idle');
     setErrorMessage(null);
   };
 
   /**
-   * Convert blob to File and pass to parent transcription handler
+   * Convert recording to a File object and submit for transcription
    */
   const handleTranscribeRecording = () => {
     if (!recordedBlob || isUploading || isTranscribing) return;
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const timestamp = Date.now();
     const fileName = `recording-${timestamp}.webm`;
+    const audioFile = new File([recordedBlob], fileName, { type: 'audio/webm' });
 
-    // Package Blob into standard Web File object
-    const file = new File([recordedBlob], fileName, {
-      type: 'audio/webm',
-      lastModified: Date.now(),
-    });
-
-    onUpload(file, { detectSpeakers });
+    onUpload(audioFile, { detectSpeakers });
   };
 
   const isBusy = isUploading || isTranscribing;
 
   return (
-    <div className="w-full bg-slate-800 rounded-2xl border border-slate-700/80 shadow-lg p-6 sm:p-8">
-      {/* Error Alert Box */}
+    <div className="w-full bg-white rounded-2xl border border-slate-200 p-6 sm:p-7 transition-all duration-150">
+      {/* Microphone Permission / Browser Error Alert */}
       {errorMessage && (
-        <div className="mb-6 p-4 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-sm flex items-start space-x-3">
-          <svg
-            className="w-5 h-5 flex-shrink-0 text-rose-400 mt-0.5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-              clipRule="evenodd"
-            />
-          </svg>
+        <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-start space-x-2.5 animate-fadeIn">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600 mt-0.5" />
           <div className="flex-1">
-            <span className="font-semibold block mb-0.5">Recording Error</span>
-            <span>{errorMessage}</span>
+            <span className="font-semibold block">Microphone Notice</span>
+            <p className="mt-0.5 text-rose-600">{errorMessage}</p>
           </div>
           <button
+            type="button"
             onClick={() => setErrorMessage(null)}
-            className="text-rose-400 hover:text-rose-200"
-            title="Dismiss error"
+            className="text-rose-400 hover:text-rose-600 text-sm"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ✕
           </button>
         </div>
       )}
 
-      {/* STATE 1: IDLE STATE */}
-      {recordingState === 'idle' && (
-        <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-              />
-            </svg>
+      {/* Recording Canvas */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-6 sm:p-8 flex flex-col items-center justify-center text-center">
+        {/* State 1: Idle (Ready to record) */}
+        {recordingState === 'idle' && (
+          <div className="flex flex-col items-center space-y-4 max-w-sm">
+            <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+              <Mic className="w-7 h-7 text-indigo-300" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">
+                Ready to Record
+              </h3>
+              <p className="text-xs text-slate-600 mt-1">
+                Record your voice or audio directly. Max duration is 5 minutes.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleStartRecording}
+              disabled={isBusy}
+              className="mt-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-600 shadow-sm transition duration-150 flex items-center space-x-2"
+            >
+              <Mic className="w-4 h-4 text-rose-400" />
+              <span>Start Recording</span>
+            </button>
           </div>
+        )}
 
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              Record from Microphone
-            </h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm">
-              Click Start to begin speaking. Recording automatically limits to 5 minutes to stay within limits.
+        {/* State 2: Live Recording */}
+        {recordingState === 'recording' && (
+          <div className="flex flex-col items-center space-y-5 animate-fadeIn">
+            {/* Pulsing Red Dot & Timer */}
+            <div className="flex items-center space-x-3 px-4 py-2 bg-rose-50 border border-rose-200 rounded-full">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-rose-700">
+                Recording live
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="font-mono text-base font-bold text-slate-900">
+                {formatTimer(duration)}
+              </span>
+              <span className="text-xs text-slate-600 font-mono">/ 05:00</span>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Speak clearly into your microphone. Click stop when finished.
             </p>
+
+            {/* Stop Button */}
+            <button
+              type="button"
+              onClick={handleStopRecording}
+              className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition duration-150 flex items-center space-x-2"
+            >
+              <Square className="w-4 h-4 fill-white" />
+              <span>Stop Recording</span>
+            </button>
           </div>
+        )}
 
-          {/* Speaker Detection Toggle */}
-          <div className="w-full max-w-md p-3.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-left my-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-slate-200">
-                  Detect speakers
-                </span>
-                <p className="text-[11px] text-amber-400/90 mt-0.5">
-                  Speaker detection is slower and uses limited credits.
-                </p>
+        {/* State 3: Recorded Preview */}
+        {recordingState === 'recorded' && audioUrl && (
+          <div className="w-full max-w-md flex flex-col items-center space-y-4 animate-fadeIn">
+            <div className="flex items-center space-x-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Audio Captured ({formatTimer(duration)})</span>
+            </div>
+
+            {/* Native Audio Preview Player */}
+            <div className="w-full p-2 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <audio controls src={audioUrl} className="w-full" />
+            </div>
+
+            {/* Action Buttons: Discard or Transcribe */}
+            {!isBusy && (
+              <div className="flex items-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleDiscardRecording}
+                  className="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition duration-150 flex items-center space-x-1.5"
+                >
+                  <Trash2 className="w-4 h-4 text-slate-600" />
+                  <span>Discard</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTranscribeRecording}
+                  className="px-6 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition duration-150 flex items-center space-x-2"
+                >
+                  <Check className="w-4 h-4 text-indigo-300" />
+                  <span>{detectSpeakers ? 'Transcribe & Detect Speakers' : 'Transcribe Recording'}</span>
+                </button>
               </div>
+            )}
+          </div>
+        )}
+      </div>
 
-              <button
-                type="button"
-                role="switch"
-                aria-checked={detectSpeakers}
-                onClick={() => setDetectSpeakers(!detectSpeakers)}
-                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  detectSpeakers ? 'bg-indigo-600' : 'bg-slate-700'
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    detectSpeakers ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
+      {/* Speaker Detection Toggle for Recordings */}
+      <div className="mt-4 p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 flex items-center justify-center flex-shrink-0">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs sm:text-sm font-semibold text-slate-900 block">
+                Detect speakers (Diarization)
+              </span>
+              <p className="text-[11px] sm:text-xs text-slate-600">
+                Identify who said what with AssemblyAI.
+              </p>
             </div>
           </div>
 
+          {/* Toggle Switch */}
           <button
             type="button"
-            onClick={handleStartRecording}
-            className="px-6 py-2.5 rounded-xl font-medium text-sm text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-900/30 hover:shadow-rose-900/50 transition-all flex items-center space-x-2"
+            role="switch"
+            aria-checked={detectSpeakers}
+            onClick={() => setDetectSpeakers(!detectSpeakers)}
+            disabled={isBusy}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
+              detectSpeakers ? 'bg-indigo-600' : 'bg-slate-200'
+            } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            <span className="w-3 h-3 rounded-full bg-white animate-pulse" />
-            <span>Start Recording</span>
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-150 ease-in-out ${
+                detectSpeakers ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
           </button>
         </div>
-      )}
+      </div>
 
-      {/* STATE 2: ACTIVE RECORDING STATE */}
-      {recordingState === 'recording' && (
-        <div className="flex flex-col items-center justify-center py-8 text-center space-y-5 animate-fadeIn">
-          {/* Pulsing Red Dot and Mic Graphic */}
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-500 border border-rose-500/30 animate-pulse">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                />
-              </svg>
-            </div>
-            <span className="absolute top-1 right-1 flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500" />
+      {/* Upload & Transcription Progress Indicator */}
+      {isBusy && (
+        <div className="mt-5 space-y-2 animate-fadeIn">
+          <div className="flex justify-between items-center text-xs font-semibold">
+            <span className="text-indigo-700">
+              {isTranscribing
+                ? detectSpeakers
+                  ? 'Identifying speakers with AssemblyAI...'
+                  : 'Transcribing with Whisper Large v3...'
+                : `Uploading recording: ${uploadProgress}%`}
+            </span>
+            <span className="text-slate-600">
+              {isTranscribing ? 'Processing...' : `${uploadProgress}%`}
             </span>
           </div>
 
-          {/* Live Timer (mm:ss) */}
-          <div>
-            <div className="text-3xl font-mono font-bold text-white tracking-wider">
-              {formatTimer(duration)}
-            </div>
-            <p className="text-xs text-rose-400 font-medium mt-1 flex items-center justify-center space-x-1.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-              <span>Recording live audio...</span>
-            </p>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Max duration: 05:00
-            </p>
+          {/* Progress bar */}
+          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div
+              className={`h-2 rounded-full transition-all duration-200 ${
+                isTranscribing
+                  ? 'bg-gradient-to-r from-indigo-500 via-teal-500 to-indigo-600 animate-pulse w-full'
+                  : 'bg-indigo-600'
+              }`}
+              style={{ width: isTranscribing ? '100%' : `${uploadProgress}%` }}
+            />
           </div>
 
-          {/* Stop Button */}
-          <button
-            type="button"
-            onClick={handleStopRecording}
-            className="px-6 py-2.5 rounded-xl font-medium text-sm text-white bg-slate-700 hover:bg-slate-600 border border-slate-600 shadow-md transition-all flex items-center space-x-2"
-          >
-            <span className="w-3 h-3 rounded-sm bg-rose-500" />
-            <span>Stop Recording</span>
-          </button>
-        </div>
-      )}
-
-      {/* STATE 3: RECORDED PREVIEW & ACTION */}
-      {recordingState === 'recorded' && (
-        <div className="space-y-5 animate-fadeIn">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-700">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-              <h4 className="text-sm font-semibold text-white">Recording Preview</h4>
-            </div>
-            <span className="text-xs font-mono text-purple-300 font-medium">
-              Duration: {formatTimer(duration)}
-            </span>
-          </div>
-
-          {/* HTML5 Audio Player */}
-          {audioUrl && (
-            <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-700">
-              <audio
-                controls
-                src={audioUrl}
-                className="w-full h-10 focus:outline-none"
-              />
+          {/* Transcribing Spinner State */}
+          {isTranscribing && (
+            <div className="flex items-center justify-center space-x-2 pt-2 text-xs sm:text-sm text-slate-600">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+              <span>
+                {detectSpeakers
+                  ? 'AssemblyAI is processing audio and detecting distinct speakers...'
+                  : 'Groq Whisper is generating high-accuracy transcription...'}
+              </span>
             </div>
           )}
-
-          {/* Speaker Detection Toggle */}
-          <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-left">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-slate-200">
-                  Detect speakers
-                </span>
-                <p className="text-[11px] text-amber-400/90 mt-0.5">
-                  Speaker detection is slower and uses limited credits.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                role="switch"
-                aria-checked={detectSpeakers}
-                onClick={() => setDetectSpeakers(!detectSpeakers)}
-                disabled={isBusy}
-                className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  detectSpeakers ? 'bg-indigo-600' : 'bg-slate-700'
-                } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    detectSpeakers ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Upload & Transcription Progress Bar (During transcription) */}
-          {isBusy && (
-            <div className="space-y-2 pt-2">
-              <div className="flex justify-between items-center text-xs font-semibold">
-                <span className="text-indigo-300">
-                  {isTranscribing
-                    ? detectSpeakers
-                      ? 'Detecting speakers with AssemblyAI...'
-                      : 'Transcribing with Whisper AI...'
-                    : `Uploading recording: ${uploadProgress}%`}
-                </span>
-                <span className="text-slate-400">
-                  {isTranscribing ? 'Processing...' : `${uploadProgress}%`}
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className={`h-2.5 rounded-full transition-all duration-300 ${
-                    isTranscribing
-                      ? 'bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 animate-pulse w-full'
-                      : 'bg-indigo-500'
-                  }`}
-                  style={{ width: isTranscribing ? '100%' : `${uploadProgress}%` }}
-                />
-              </div>
-
-              {isTranscribing && (
-                <div className="flex items-center justify-center space-x-2 pt-1 text-sm text-purple-300">
-                  <svg className="animate-spin h-4 w-4 text-purple-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  <span>
-                    {detectSpeakers
-                      ? 'AssemblyAI is identifying speakers and transcribing...'
-                      : 'Groq Whisper is transcribing your recording...'}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Action Buttons: Discard and Transcribe */}
-          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleDiscardRecording}
-              disabled={isBusy}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-700/80 hover:bg-slate-700 disabled:opacity-50 transition"
-            >
-              Discard & Re-record
-            </button>
-
-            <button
-              type="button"
-              onClick={handleTranscribeRecording}
-              disabled={isBusy}
-              className="w-full sm:w-auto px-6 py-2 rounded-xl text-xs sm:text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed shadow-md hover:shadow-indigo-500/20 transition flex items-center justify-center space-x-2"
-            >
-              {isBusy ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  <span>{isTranscribing ? 'Processing...' : 'Uploading...'}</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
-                  <span>
-                    {detectSpeakers ? 'Transcribe & Detect Speakers' : 'Transcribe Recording'}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
         </div>
       )}
     </div>

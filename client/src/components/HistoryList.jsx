@@ -1,5 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getTranscripts, deleteTranscript } from '../api/transcriptApi.js';
+import {
+  Search,
+  FileText,
+  Clock,
+  Globe,
+  Calendar,
+  Users,
+  Copy,
+  Download,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  AlertCircle,
+  Loader2,
+  Inbox,
+} from 'lucide-react';
 
 /**
  * Format duration in seconds to a human-friendly string (e.g. "1m 14s" or "24s")
@@ -25,32 +44,32 @@ const formatTimestamp = (seconds) => {
 };
 
 /**
- * Color palettes for speakers (matches TranscriptResult)
+ * Light pastel color themes for speakers
  */
 const SPEAKER_THEMES = [
   {
     avatar: 'bg-indigo-600 text-white',
-    bubble: 'bg-indigo-950/40 border-indigo-800/60 text-indigo-100',
+    bubble: 'bg-indigo-50/70 border-indigo-200 text-slate-900',
   },
   {
     avatar: 'bg-emerald-600 text-white',
-    bubble: 'bg-emerald-950/40 border-emerald-800/60 text-emerald-100',
+    bubble: 'bg-emerald-50/70 border-emerald-200 text-slate-900',
   },
   {
     avatar: 'bg-purple-600 text-white',
-    bubble: 'bg-purple-950/40 border-purple-800/60 text-purple-100',
+    bubble: 'bg-purple-50/70 border-purple-200 text-slate-900',
   },
   {
     avatar: 'bg-amber-600 text-white',
-    bubble: 'bg-amber-950/40 border-amber-800/60 text-amber-100',
+    bubble: 'bg-amber-50/70 border-amber-200 text-slate-900',
   },
   {
     avatar: 'bg-cyan-600 text-white',
-    bubble: 'bg-cyan-950/40 border-cyan-800/60 text-cyan-100',
+    bubble: 'bg-cyan-50/70 border-cyan-200 text-slate-900',
   },
   {
     avatar: 'bg-rose-600 text-white',
-    bubble: 'bg-rose-950/40 border-rose-800/60 text-rose-100',
+    bubble: 'bg-rose-50/70 border-rose-200 text-slate-900',
   },
 ];
 
@@ -88,17 +107,16 @@ const getFormattedItemText = (item) => {
 
 /**
  * HistoryList Component
- * Displays searchable, paginated transcription history with expandable items,
- * speaker badges & chat-style diarization view, copy/download actions, and deletion.
+ * Displays searchable, paginated transcription history in a clean SaaS layout.
  */
-function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
+function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setExternalSearch }) {
   const [transcripts, setTranscripts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Search & Pagination State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState(externalSearch || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(externalSearch || '');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -109,10 +127,18 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
   const [deletingId, setDeletingId] = useState(null); // ID pending confirmation
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Sync external search term from Topbar if it changes
+  useEffect(() => {
+    if (externalSearch !== undefined && externalSearch !== searchTerm) {
+      setSearchTerm(externalSearch);
+    }
+  }, [externalSearch]);
+
   // 400 ms debounce for search input
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchTerm);
+      if (setExternalSearch) setExternalSearch(searchTerm);
       setPage(1); // Reset to page 1 on new search term
     }, 400);
 
@@ -129,7 +155,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
       const response = await getTranscripts({
         search: debouncedSearch,
         page,
-        limit: 5,
+        limit: 6,
       });
 
       const list = response.transcripts || response.data || [];
@@ -232,46 +258,43 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
   };
 
   return (
-    <div className="w-full bg-slate-800 rounded-2xl border border-slate-700/80 shadow-xl p-6 sm:p-8 mt-8">
-      {/* Header & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-700">
+    <div className="w-full bg-white rounded-2xl border border-slate-200 p-6 sm:p-7 transition-all duration-150">
+      {/* Header & Local Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-100">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span>📜 Transcript History</span>
+          <div className="flex items-center space-x-2.5">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+              Transcription History
+            </h2>
             {totalItems > 0 && (
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-700 text-slate-300 font-medium">
-                {totalItems} {totalItems === 1 ? 'record' : 'records'}
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium border border-slate-200">
+                {totalItems} {totalItems === 1 ? 'item' : 'items'}
               </span>
             )}
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          </div>
+          <p className="text-xs text-slate-600 mt-1">
             Search, review, copy, or download past audio transcriptions
           </p>
         </div>
 
-        {/* Search Input Box */}
+        {/* Search input with clear button */}
         <div className="relative w-full sm:w-72">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600 pointer-events-none" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search keyword or filename..."
-            className="w-full pl-9 pr-8 py-2 text-xs bg-slate-900/90 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+            placeholder="Filter by keyword..."
+            className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition duration-150"
           />
           {searchTerm && (
             <button
+              type="button"
               onClick={() => setSearchTerm('')}
-              className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-200"
-              title="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-800 text-xs p-1"
+              aria-label="Clear filter"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              ✕
             </button>
           )}
         </div>
@@ -279,270 +302,269 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
 
       {/* Error state */}
       {error && (
-        <div className="mt-6 p-4 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-sm flex items-center justify-between">
+        <div className="mt-5 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center space-x-2.5 animate-fadeIn">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
           <span>{error}</span>
-          <button
-            onClick={fetchHistory}
-            className="px-3 py-1 text-xs bg-rose-900/80 hover:bg-rose-800 rounded-lg text-white font-medium transition"
-          >
-            Retry
-          </button>
         </div>
       )}
 
       {/* Loading Skeletons */}
-      {loading && (
-        <div className="mt-6 space-y-4">
-          {[1, 2, 3].map((i) => (
+      {loading ? (
+        <div className="mt-6 space-y-3">
+          {[1, 2, 3].map((n) => (
             <div
-              key={i}
-              className="p-5 rounded-xl bg-slate-900/40 border border-slate-700/50 animate-pulse space-y-3"
+              key={n}
+              className="p-5 rounded-xl border border-slate-200 bg-slate-50 animate-pulse space-y-3"
             >
-              <div className="flex items-center justify-between">
-                <div className="h-4 bg-slate-700 rounded w-1/3"></div>
-                <div className="h-4 bg-slate-700 rounded w-20"></div>
+              <div className="flex justify-between items-center">
+                <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+                <div className="h-4 bg-slate-200 rounded w-20"></div>
               </div>
-              <div className="h-3 bg-slate-700/60 rounded w-full"></div>
-              <div className="h-3 bg-slate-700/60 rounded w-4/5"></div>
-              <div className="flex gap-2 pt-1">
-                <div className="h-5 bg-slate-800 rounded-md w-16"></div>
-                <div className="h-5 bg-slate-800 rounded-md w-16"></div>
-              </div>
+              <div className="h-3 bg-slate-200 rounded w-4/5"></div>
+              <div className="h-3 bg-slate-200 rounded w-2/5"></div>
             </div>
           ))}
         </div>
-      )}
-
-      {/* Empty State */}
-      {!loading && !error && transcripts.length === 0 && (
-        <div className="text-center py-12 px-4">
-          <div className="w-12 h-12 rounded-full bg-slate-700/40 text-slate-400 flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+      ) : transcripts.length === 0 ? (
+        /* Empty State */
+        <div className="mt-8 py-12 px-4 text-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center mx-auto mb-3">
+            <Inbox className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-semibold text-slate-200">
+          <p className="text-sm font-semibold text-slate-800">
             {debouncedSearch ? 'No matching transcripts found' : 'No transcripts yet'}
-          </h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            {debouncedSearch
-              ? `No results match "${debouncedSearch}". Try a different keyword or filename.`
-              : 'Upload and transcribe an audio file above to start building your history.'}
           </p>
+          <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+            {debouncedSearch
+              ? `No transcripts match "${debouncedSearch}". Try a different keyword.`
+              : 'Upload or record audio on the Transcribe tab to build your library.'}
+          </p>
+          {debouncedSearch && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="mt-3 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50"
+            >
+              Clear filter
+            </button>
+          )}
         </div>
-      )}
-
-      {/* Transcript Items List */}
-      {!loading && !error && transcripts.length > 0 && (
-        <div className="mt-6 space-y-3">
+      ) : (
+        /* Transcripts List */
+        <div className="mt-5 space-y-3">
           {transcripts.map((item) => {
             const isExpanded = expandedId === item._id;
+            const isCopied = copiedId === item._id;
             const isPendingDelete = deletingId === item._id;
             const hasSegments = Array.isArray(item.segments) && item.segments.length > 0;
-            const detectedSpeakers = item.speakerCount || (hasSegments ? new Set(item.segments.map((s) => s.speaker)).size : 0);
+            const speakerCount = item.speakerCount || (hasSegments ? new Set(item.segments.map((s) => s.speaker)).size : 0);
 
-            const textPreview = item.text
-              ? item.text.length > 100
-                ? `${item.text.slice(0, 100).trim()}...`
-                : item.text
-              : '';
+            // Preview: first ~100 characters
+            const rawText = item.text || (hasSegments ? item.segments.map((s) => s.text).join(' ') : '');
+            const textPreview = rawText.length > 110 ? `${rawText.slice(0, 110).trim()}...` : rawText;
 
             return (
               <div
                 key={item._id}
                 onClick={() => handleToggleExpand(item._id)}
-                className={`p-5 rounded-xl border transition-all duration-200 cursor-pointer ${
+                className={`rounded-xl border transition duration-150 cursor-pointer ${
                   isExpanded
-                    ? 'bg-slate-900/90 border-indigo-500/60 shadow-lg'
-                    : 'bg-slate-900/40 hover:bg-slate-900/70 border-slate-700/70'
+                    ? 'border-indigo-300 bg-indigo-50/20'
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
                 }`}
               >
-                {/* Header Row: Filename, Meta & Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="flex items-center space-x-2.5 overflow-hidden">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 flex-shrink-0" />
-                    <span className="font-semibold text-sm text-slate-100 truncate">
-                      {item.originalFileName || 'Untitled Audio'}
-                    </span>
+                {/* Header Row */}
+                <div className="p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      {/* File Name & Speaker Diarization Badge */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <FileText className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                        <span className="font-semibold text-sm sm:text-base text-slate-900 truncate">
+                          {item.originalFileName || 'Untitled Audio'}
+                        </span>
 
-                    {/* Step 6: Small Speaker Count Badge */}
-                    {hasSegments && detectedSpeakers > 0 && (
-                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-semibold flex items-center space-x-1 flex-shrink-0">
-                        <span>👥</span>
-                        <span>{detectedSpeakers} {detectedSpeakers === 1 ? 'speaker' : 'speakers'}</span>
+                        {hasSegments && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <Users className="w-3 h-3 text-indigo-600" />
+                            <span>{speakerCount} {speakerCount === 1 ? 'speaker' : 'speakers'}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Text Preview (when collapsed) */}
+                      {!isExpanded && (
+                        <p className="mt-2 text-xs sm:text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                          {textPreview || <span className="italic text-slate-600">No transcript text recorded.</span>}
+                        </p>
+                      )}
+
+                      {/* Metadata Badges */}
+                      <div className="flex flex-wrap items-center gap-2 mt-3 text-xs text-slate-600">
+                        {item.language && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
+                            <Globe className="w-3 h-3 text-slate-600" />
+                            <span className="uppercase font-medium text-slate-700">{item.language}</span>
+                          </span>
+                        )}
+
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
+                          <Clock className="w-3 h-3 text-slate-600" />
+                          <span>{formatDuration(item.duration)}</span>
+                        </span>
+
+                        {item.createdAt && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
+                            <Calendar className="w-3 h-3 text-slate-600" />
+                            <span>{formatDate(item.createdAt)}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions & Chevron Button */}
+                    <div className="flex items-center space-x-2 self-end sm:self-start pt-1 sm:pt-0">
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopy(e, item)}
+                        className={`p-1.5 rounded-lg border text-xs transition duration-150 ${
+                          isCopied
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                        }`}
+                        title="Copy transcript"
+                      >
+                        {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleDownload(e, item)}
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs transition duration-150"
+                        title="Download .txt"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Delete Trigger */}
+                      {isPendingDelete ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center space-x-1.5 bg-rose-50 border border-rose-200 rounded-lg p-1 animate-fadeIn"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => handleConfirmDelete(e, item._id)}
+                            disabled={isDeleting}
+                            className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 text-white hover:bg-rose-700 transition"
+                          >
+                            {isDeleting ? 'Deleting...' : 'Confirm'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingId(null);
+                            }}
+                            className="px-1.5 py-0.5 rounded text-[11px] text-slate-600 hover:text-slate-800"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingId(item._id);
+                          }}
+                          className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs transition duration-150"
+                          title="Delete transcript"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {/* Expand / Collapse Toggle */}
+                      <span className="p-1 text-slate-600">
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-2 text-xs text-slate-400 flex-shrink-0">
-                    <span>{formatDate(item.createdAt)}</span>
-                    <svg
-                      className={`w-4 h-4 text-slate-400 transform transition-transform duration-200 ${
-                        isExpanded ? 'rotate-180 text-indigo-400' : ''
-                      }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    </div>
                   </div>
                 </div>
 
-                {/* Collapsed Preview: ~100 chars (preserves Hindi & Unicode characters) */}
-                {!isExpanded && (
-                  <p className="mt-2.5 text-xs text-slate-300 leading-relaxed break-words font-sans selection:bg-indigo-500">
-                    {textPreview}
-                  </p>
-                )}
-
-                {/* Expanded Full View */}
+                {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="mt-4 pt-4 border-t border-slate-800 space-y-4 animate-fadeIn">
-                    {/* Chat-style Segments OR Full Plain Text Box */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-4 sm:p-5 pt-0 border-t border-slate-100 bg-slate-50/50 rounded-b-xl space-y-3"
+                  >
+                    <div className="flex items-center justify-between pt-3 pb-1">
+                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                        Full Transcript Text
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopy(e, item)}
+                          className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>{isCopied ? 'Copied' : 'Copy'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDownload(e, item)}
+                          className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download .txt</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {hasSegments ? (
-                      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                        {item.segments.map((seg, sIdx) => {
-                          const theme = getSpeakerTheme(seg.speaker);
+                      <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                        {item.segments.map((segment, idx) => {
+                          const theme = getSpeakerTheme(segment.speaker);
                           return (
                             <div
-                              key={sIdx}
+                              key={idx}
                               className={`p-3.5 rounded-xl border ${theme.bubble}`}
                             >
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center space-x-2">
                                   <div
-                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${theme.avatar}`}
+                                    className={`w-5 h-5 rounded-md ${theme.avatar} text-[10px] font-bold flex items-center justify-center`}
                                   >
-                                    S{seg.speaker}
+                                    {segment.speaker}
                                   </div>
-                                  <span className="text-xs font-bold text-white">
-                                    Speaker {seg.speaker}
+                                  <span className="text-xs font-bold text-slate-900">
+                                    Speaker {segment.speaker}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-800">
-                                  {formatTimestamp(seg.start)} - {formatTimestamp(seg.end)}
-                                </span>
+                                {(segment.start !== undefined || segment.end !== undefined) && (
+                                  <span className="text-[11px] font-mono text-slate-600">
+                                    {formatTimestamp(segment.start)} - {formatTimestamp(segment.end)}
+                                  </span>
+                                )}
                               </div>
-                              <p className="text-xs text-slate-200 leading-relaxed font-sans whitespace-pre-wrap break-words pl-7 selection:bg-indigo-500">
-                                {seg.text}
+                              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-normal whitespace-pre-wrap">
+                                {segment.text}
                               </p>
                             </div>
                           );
                         })}
                       </div>
                     ) : (
-                      <div className="p-4 rounded-lg bg-slate-950/70 border border-slate-800 text-slate-100 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans break-words max-h-80 overflow-y-auto selection:bg-indigo-500 selection:text-white">
-                        {item.text}
+                      <div className="p-4 rounded-xl bg-white border border-slate-200 max-h-[300px] overflow-y-auto">
+                        <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                          {item.text}
+                        </p>
                       </div>
                     )}
-
-                    {/* Action Toolbar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                      {/* Left: Copy & Download buttons */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopy(e, item)}
-                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center space-x-1.5 ${
-                            copiedId === item._id
-                              ? 'bg-emerald-600 border-emerald-500 text-white'
-                              : 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-200'
-                          }`}
-                          title="Copy text with speaker labels"
-                        >
-                          {copiedId === item._id ? (
-                            <>
-                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              <span>Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                              </svg>
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => handleDownload(e, item)}
-                          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all flex items-center space-x-1.5"
-                          title="Download UTF-8 .txt with speaker labels"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                          <span>Download .txt</span>
-                        </button>
-                      </div>
-
-                      {/* Right: Delete button with inline confirmation */}
-                      <div>
-                        {isPendingDelete ? (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center space-x-2 bg-rose-950/70 border border-rose-800/80 px-2.5 py-1 rounded-lg"
-                          >
-                            <span className="text-xs text-rose-300 font-medium">Delete transcript?</span>
-                            <button
-                              type="button"
-                              onClick={(e) => handleConfirmDelete(e, item._id)}
-                              disabled={isDeleting}
-                              className="px-2 py-0.5 text-xs bg-rose-600 hover:bg-rose-500 text-white rounded font-semibold transition"
-                            >
-                              {isDeleting ? 'Deleting...' : 'Yes, Delete'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeletingId(null);
-                              }}
-                              className="px-2 py-0.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingId(item._id);
-                            }}
-                            className="px-2.5 py-1.5 text-xs rounded-lg text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 border border-transparent hover:border-rose-900 transition flex items-center space-x-1"
-                            title="Delete transcript"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            <span>Delete</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 )}
-
-                {/* Metadata Pills Footer */}
-                <div className="flex flex-wrap items-center gap-2 mt-3 pt-2 text-[11px] text-slate-400 border-t border-slate-800/60">
-                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 font-medium text-indigo-300 capitalize">
-                    {item.language || 'Auto'}
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 font-medium text-purple-300">
-                    {formatDuration(item.duration)}
-                  </span>
-                  {item.fileSize && (
-                    <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 font-medium text-slate-400">
-                      {(item.fileSize / (1024 * 1024)).toFixed(2)} MB
-                    </span>
-                  )}
-                </div>
               </div>
             );
           })}
@@ -550,34 +572,38 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted }) {
       )}
 
       {/* Pagination Controls */}
-      {!loading && !error && totalPages > 1 && (
-        <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-700 text-xs">
-          <button
-            onClick={() => setPage((p) => Math.max(p - 1, 1))}
-            disabled={page <= 1}
-            className="px-3.5 py-1.5 rounded-lg bg-slate-700/80 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition font-medium flex items-center space-x-1"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span>Previous</span>
-          </button>
+      {!loading && totalPages > 1 && (
+        <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm text-slate-600">
+          <div>
+            Showing page <span className="font-semibold text-slate-900">{page}</span> of{' '}
+            <span className="font-semibold text-slate-900">{totalPages}</span> ({totalItems} total)
+          </div>
 
-          <span className="text-slate-400 font-medium">
-            Page <span className="text-slate-200 font-bold">{page}</span> of{' '}
-            <span className="text-slate-200 font-bold">{totalPages}</span>
-          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-50 disabled:text-slate-300 disabled:cursor-not-allowed transition duration-150 flex items-center space-x-1"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Previous</span>
+            </button>
 
-          <button
-            onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-            disabled={page >= totalPages}
-            className="px-3.5 py-1.5 rounded-lg bg-slate-700/80 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition font-medium flex items-center space-x-1"
-          >
-            <span>Next</span>
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+            <span className="px-2 font-mono font-medium text-slate-900">
+              {page} / {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:bg-slate-50 disabled:text-slate-300 disabled:cursor-not-allowed transition duration-150 flex items-center space-x-1"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>

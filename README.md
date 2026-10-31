@@ -36,6 +36,10 @@ speech-to-text/
 │   │   ├── api/
 │   │   │   └── transcriptApi.js  # Axios client with auth interceptors & CRUD
 │   │   ├── components/
+│   │   │   ├── layout/
+│   │   │   │   ├── DashboardLayout.jsx # SaaS dashboard shell with sidebar & topbar
+│   │   │   │   ├── Sidebar.jsx         # Fixed 240px nav sidebar + mobile drawer
+│   │   │   │   └── Topbar.jsx          # Header with search, health pill & user avatar
 │   │   │   ├── HistoryList.jsx   # Searchable & paginated transcript history
 │   │   │   ├── Recorder.jsx      # Live microphone recorder with preview & timer
 │   │   │   ├── TranscriptResult.jsx # Full transcript viewer, copy & download
@@ -45,8 +49,8 @@ speech-to-text/
 │   │   ├── pages/
 │   │   │   ├── Login.jsx         # User login form with client validation
 │   │   │   └── Register.jsx      # User registration form with validation
-│   │   ├── App.jsx               # Dashboard, tab switcher & health indicator
-│   │   ├── index.css             # Tailwind CSS directives & animations
+│   │   ├── App.jsx               # SaaS Dashboard with hero, quick actions & recent grid
+│   │   ├── index.css             # Tailwind CSS directives, Google Fonts & animations
 │   │   └── main.jsx              # React DOM root entry with AuthProvider
 │   ├── index.html                # Vite HTML shell
 │   ├── package.json              # Client dependencies & scripts
@@ -274,4 +278,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 5:** Live mic recording (MediaRecorder, timer & pulsing indicator, audio preview player, auto-stop at 5 min, hardware track release, tab switcher).
 - [x] **Step 6:** Speaker detection (AssemblyAI diarization, speaker labels 1-N, start/end timestamps, chat-style view, multi-speaker badges & exports).
 - [x] **Step 7:** User authentication & ownership (JWT auth, bcrypt 12 rounds, rate limiting, protected user routes, login/register views, session restoration).
+- [x] **Step 8:** UI redesign into a clean SaaS dashboard (Slate-50 light theme, Inter + Instrument Serif typography, fixed left sidebar, mobile drawer, sticky topbar with global search & health pill, gradient hero, 3 quick action tiles, 6-card recent grid, and soft pastel speaker styling).
 
