@@ -8,8 +8,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Allowed audio extensions and MIME types
-const ALLOWED_EXTENSIONS = /\.(mp3|wav|m4a|webm|ogg)$/i;
+// Allowed audio extensions and MIME types (including oga and opus)
+const ALLOWED_EXTENSIONS = /\.(mp3|wav|m4a|webm|ogg|oga|opus)$/i;
 const ALLOWED_MIME_TYPES = [
   'audio/mpeg',
   'audio/mp3',
@@ -23,6 +23,8 @@ const ALLOWED_MIME_TYPES = [
   'video/webm',
   'audio/ogg',
   'application/ogg',
+  'audio/x-oga',
+  'audio/opus',
 ];
 
 // Configure disk storage for Multer
@@ -48,7 +50,7 @@ const fileFilter = (req, file, cb) => {
   }
 
   return cb(
-    new Error('Invalid file type. Only audio files (.mp3, .wav, .m4a, .webm, .ogg) are allowed.'),
+    new Error('Invalid file type. Only audio files (.mp3, .wav, .m4a, .webm, .ogg, .oga, .opus) are allowed.'),
     false
   );
 };
@@ -63,4 +65,3 @@ const upload = multer({
 });
 
 export default upload;
-

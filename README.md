@@ -1,6 +1,6 @@
 # 🎙️ Audio to Text Transcriber (MERN Stack)
 
-A modern full-stack web application that allows users to upload audio files (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`), transcribes them with high accuracy using **Groq's Whisper API** (`whisper-large-v3`), stores the transcription data in **MongoDB Atlas**, and renders the results in a reactive **React + Tailwind CSS** frontend.
+A modern full-stack web application that allows users to upload audio files (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`, `.oga`, `.opus`), transcribes them with high accuracy using **Groq's Whisper API** (`whisper-large-v3`), stores the transcription data in **MongoDB Atlas**, and renders the results in a reactive **React + Tailwind CSS** frontend.
 
 ---
 
@@ -145,7 +145,7 @@ Base URL: `http://localhost:5000`
 - **`POST /api/transcripts`**
 - **Content-Type:** `multipart/form-data`
 - **Body:**
-  - `audio`: Audio file (`.mp3`, `.wav`, `.m4a`, `.webm`, or `.ogg`, max **25 MB**)
+  - `audio`: Audio file (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`, `.oga`, or `.opus`, max **25 MB**)
 - **Response `201 Created`**:
   ```json
   {
@@ -232,7 +232,7 @@ The backend has built-in global error-handling for upload and validation edge ca
 | :--- | :---: | :--- |
 | File > 25 MB | `400 Bad Request` | `{"error": "File too large. Maximum allowed file size is 25 MB."}` |
 | Wrong Field Name | `400 Bad Request` | `{"error": "Unexpected field '<name>'. Please upload audio using the form field name 'audio'."}` |
-| Disallowed Extension/MIME | `400 Bad Request` | `{"error": "Invalid file type. Only audio files (.mp3, .wav, .m4a, .webm, .ogg) are allowed."}` |
+| Disallowed Extension/MIME | `400 Bad Request` | `{"error": "Invalid file type. Only audio files (.mp3, .wav, .m4a, .webm, .ogg, .oga, .opus) are allowed."}` |
 | Missing Audio in Request | `400 Bad Request` | `{"error": "No audio file uploaded. Please provide an audio file with the field name 'audio'."}` |
 | Invalid MongoDB ObjectId | `400 Bad Request` | `{"error": "Invalid transcript ID format"}` |
 | Non-existent Record | `404 Not Found` | `{"error": "Transcript not found"}` |
@@ -245,5 +245,6 @@ The backend has built-in global error-handling for upload and validation edge ca
 
 - [x] **Step 1:** Project setup (Express ES modules, Vite + Tailwind client, health check).
 - [x] **Step 2:** Backend audio transcription API (Multer, Groq `whisper-large-v3`, Mongoose schema, CRUD routes).
-- [ ] **Step 3:** Frontend UI (Drag-and-drop audio uploader, transcription viewer, history sidebar, copy/export text).
+- [x] **Step 3:** Frontend UI (Drag-and-drop audio uploader, client validation, progress/transcribing states, copy/download buttons, backend error alert).
+- [ ] **Step 4:** Transcript history drawer & advanced playback.
 
