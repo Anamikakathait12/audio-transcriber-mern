@@ -50,16 +50,51 @@ export const transcribe = async (req, res, next) => {
 };
 
 /**
- * Retrieve all transcripts sorted from newest to oldest.
+ * Retrieve transcripts with search and pagination support.
+ * Query params:
+ *   - search: string (matches text or originalFileName case-insensitively)
+ *   - page: number (default 1)
+ *   - limit: number (default 10)
  * GET /api/transcripts
  */
 export const getAllTranscripts = async (req, res, next) => {
   try {
-    const transcripts = await Transcript.find().sort({ createdAt: -1 });
+    const { search, page = 1, limit = 10 } = req.query;
+
+    const query = {};
+
+    // Case-insensitive search on text and originalFileName
+    if (search && search.trim() !== '') {
+      const sanitizedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(sanitizedSearch, 'i');
+      query.$or = [
+        { text: searchRegex },
+        { originalFileName: searchRegex },
+      ];
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Fetch paginated results and total document count concurrently
+    const [transcripts, total] = await Promise.all([
+      Transcript.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Transcript.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(total / limitNum) || 1;
 
     return res.status(200).json({
+      transcripts,
+      total,
+      page: pageNum,
+      totalPages,
       count: transcripts.length,
-      data: transcripts,
+      data: transcripts, // Backwards compatibility
     });
   } catch (error) {
     next(error);
@@ -116,4 +151,3 @@ export const deleteTranscript = async (req, res, next) => {
     next(error);
   }
 };
-

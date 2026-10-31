@@ -37,10 +37,10 @@ function TranscriptResult({ transcript, onClear }) {
     }
   };
 
-  // Handle Download as .txt file
+  // Handle Download as .txt file (prepending \uFEFF BOM for clean UTF-8 rendering in Windows/Notepad for Hindi and non-Latin scripts)
   const handleDownload = () => {
     if (!text) return;
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
 

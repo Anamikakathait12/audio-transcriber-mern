@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { checkHealth, uploadAudio } from './api/transcriptApi.js';
 import UploadBox from './components/UploadBox.jsx';
 import TranscriptResult from './components/TranscriptResult.jsx';
+import HistoryList from './components/HistoryList.jsx';
 
 function App() {
   // Server Health State (from Step 1)
@@ -13,6 +14,9 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // History Refresh Trigger (Step 4)
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
   // Backend Error State
   const [backendError, setBackendError] = useState(null);
@@ -61,6 +65,8 @@ function App() {
 
       if (response && response.data) {
         setCurrentTranscript(response.data);
+        // Automatically refresh history list when a new upload finishes (Step 4)
+        setHistoryRefreshTrigger((prev) => prev + 1);
       }
     } catch (err) {
       console.error('Transcription request failed:', err);
@@ -75,6 +81,15 @@ function App() {
       setIsUploading(false);
       setIsTranscribing(false);
       setUploadProgress(0);
+    }
+  };
+
+  /**
+   * Handle cleanup if the currently viewed transcript is deleted from history
+   */
+  const handleTranscriptDeleted = (deletedId) => {
+    if (currentTranscript && currentTranscript._id === deletedId) {
+      setCurrentTranscript(null);
     }
   };
 
@@ -174,18 +189,26 @@ function App() {
           />
         </section>
 
-        {/* Transcription Output Display (Step 3) */}
-        <section aria-label="Transcription Result">
+        {/* Current Transcription Output Display (Step 3) */}
+        <section aria-label="Current Transcription Result">
           <TranscriptResult
             transcript={currentTranscript}
             onClear={() => setCurrentTranscript(null)}
+          />
+        </section>
+
+        {/* Transcript History List (Step 4) */}
+        <section aria-label="Transcription History">
+          <HistoryList
+            refreshTrigger={historyRefreshTrigger}
+            onTranscriptDeleted={handleTranscriptDeleted}
           />
         </section>
       </div>
 
       {/* Subtle Footer */}
       <footer className="text-center text-xs text-slate-500 mt-12">
-        <p>Audio to Text Transcriber &bull; MERN Stack Step 3 &bull; Whisper Large v3</p>
+        <p>Audio to Text Transcriber &bull; MERN Stack Step 4 &bull; Whisper Large v3</p>
       </footer>
     </div>
   );

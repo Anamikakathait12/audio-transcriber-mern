@@ -164,14 +164,16 @@ Base URL: `http://localhost:5000`
 
 ---
 
-### 3. List All Transcripts
-- **`GET /api/transcripts`**
-- **Description:** Returns all saved transcripts ordered by newest first.
+### 3. List All Transcripts (Search & Pagination)
+- **`GET /api/transcripts?search=keyword&page=1&limit=10`**
+- **Query Parameters:**
+  - `search` *(optional)*: Case-insensitive search match across transcript text and original file name.
+  - `page` *(optional, default: 1)*: Page number.
+  - `limit` *(optional, default: 10)*: Number of items per page.
 - **Response `200 OK`**:
   ```json
   {
-    "count": 1,
-    "data": [
+    "transcripts": [
       {
         "_id": "672289f812b1d30560a1e3e4",
         "text": "Antigravity voice transcription powered by Whisper Large v3.",
@@ -181,7 +183,10 @@ Base URL: `http://localhost:5000`
         "duration": 4.12,
         "createdAt": "2026-10-30T18:30:15.000Z"
       }
-    ]
+    ],
+    "total": 1,
+    "page": 1,
+    "totalPages": 1
   }
   ```
 
@@ -246,5 +251,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 1:** Project setup (Express ES modules, Vite + Tailwind client, health check).
 - [x] **Step 2:** Backend audio transcription API (Multer, Groq `whisper-large-v3`, Mongoose schema, CRUD routes).
 - [x] **Step 3:** Frontend UI (Drag-and-drop audio uploader, client validation, progress/transcribing states, copy/download buttons, backend error alert).
-- [ ] **Step 4:** Transcript history drawer & advanced playback.
+- [x] **Step 4:** Transcript history (Search with debounce, pagination, expand/collapse, copy/download with UTF-8 BOM for Hindi & non-English, delete confirmation, auto-refresh on new upload).
 

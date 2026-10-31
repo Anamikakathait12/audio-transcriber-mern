@@ -39,12 +39,13 @@ export const uploadAudio = async (file, onProgress) => {
 };
 
 /**
- * Fetch all saved transcripts from the backend.
+ * Fetch transcripts with optional search and pagination.
  * 
- * @returns {Promise<Array>} List of transcript objects (newest first)
+ * @param {Object} [params] - Query parameters { search, page, limit }
+ * @returns {Promise<{ transcripts: Array, total: number, page: number, totalPages: number }>}
  */
-export const getTranscripts = async () => {
-  const response = await apiClient.get('/transcripts');
+export const getTranscripts = async (params = {}) => {
+  const response = await apiClient.get('/transcripts', { params });
   return response.data;
 };
 
@@ -81,4 +82,3 @@ export const checkHealth = async () => {
 };
 
 export default apiClient;
-
