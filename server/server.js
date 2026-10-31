@@ -7,9 +7,17 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import connectDB from './config/db.js';
 import transcriptRoutes from './routes/transcriptRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 // Load environment variables from .env
 dotenv.config();
+
+// Enforce JWT_SECRET requirement before starting
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '') {
+  console.error('❌ [FATAL ERROR] JWT_SECRET is not set in environment variables.');
+  console.error('❌ The server refuses to start without a valid JWT_SECRET.');
+  process.exit(1);
+}
 
 // Connect to MongoDB Atlas
 await connectDB();
@@ -17,8 +25,10 @@ await connectDB();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable reverse proxy trust (Render / Vercel / Nginx) so rate limiters see the real client IP
+app.set('trust proxy', 1);
+
 // Standard Middlewares
-// Allow only the local dev client and the deployed frontend
 const allowedOrigins = [
   'http://localhost:5173',
   process.env.CLIENT_URL, // set this in Render, e.g. https://audio-transcriber-mern.vercel.app
@@ -39,7 +49,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /**
- * Health check route
+ * Health check route (Public)
  * Used to verify server status from frontend or monitoring tools
  */
 app.get('/api/health', (req, res) => {
@@ -50,7 +60,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Transcript routes
+// Authentication routes (Step 7)
+app.use('/api/auth', authRoutes);
+
+// Transcript routes (Protected)
 app.use('/api/transcripts', transcriptRoutes);
 
 // Fallback 404 handler for unknown routes

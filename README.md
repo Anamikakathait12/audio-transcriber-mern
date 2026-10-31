@@ -12,13 +12,17 @@ speech-to-text/
 │   ├── config/
 │   │   └── db.js                 # MongoDB Mongoose connection handler
 │   ├── controllers/
+│   │   ├── authController.js     # User registration, login, & session
 │   │   └── transcriptController.js # Upload, transcribe, fetch, & delete logic
 │   ├── middleware/
+│   │   ├── auth.js               # JWT Bearer token protection middleware
 │   │   └── upload.js             # Multer setup (file filter & 25MB limit)
 │   ├── models/
-│   │   └── Transcript.js         # Mongoose schema for transcripts
+│   │   ├── Transcript.js         # Mongoose schema for transcripts (user-scoped)
+│   │   └── User.js               # User schema with bcrypt (12 rounds) & validation
 │   ├── routes/
-│   │   └── transcriptRoutes.js   # /api/transcripts routing
+│   │   ├── authRoutes.js         # /api/auth routes with rate limiting
+│   │   └── transcriptRoutes.js   # /api/transcripts routing (protected)
 │   ├── services/
 │   │   ├── diarizeService.js     # AssemblyAI speaker diarization client
 │   │   └── transcribeService.js  # Isolated Groq Whisper API client
@@ -30,15 +34,20 @@ speech-to-text/
 ├── client/
 │   ├── src/
 │   │   ├── api/
-│   │   │   └── transcriptApi.js  # Axios client with upload, fetch, & delete
+│   │   │   └── transcriptApi.js  # Axios client with auth interceptors & CRUD
 │   │   ├── components/
 │   │   │   ├── HistoryList.jsx   # Searchable & paginated transcript history
 │   │   │   ├── Recorder.jsx      # Live microphone recorder with preview & timer
 │   │   │   ├── TranscriptResult.jsx # Full transcript viewer, copy & download
 │   │   │   └── UploadBox.jsx     # Drag-and-drop audio uploader with validation
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx   # React Auth context (JWT storage & session)
+│   │   ├── pages/
+│   │   │   ├── Login.jsx         # User login form with client validation
+│   │   │   └── Register.jsx      # User registration form with validation
 │   │   ├── App.jsx               # Dashboard, tab switcher & health indicator
 │   │   ├── index.css             # Tailwind CSS directives & animations
-│   │   └── main.jsx              # React DOM root entry
+│   │   └── main.jsx              # React DOM root entry with AuthProvider
 │   ├── index.html                # Vite HTML shell
 │   ├── package.json              # Client dependencies & scripts
 │   ├── tailwind.config.js        # Tailwind CSS configuration
@@ -264,4 +273,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 4:** Transcript history (Search with debounce, pagination, expand/collapse, copy/download with UTF-8 BOM for Hindi & non-English, delete confirmation, auto-refresh on new upload).
 - [x] **Step 5:** Live mic recording (MediaRecorder, timer & pulsing indicator, audio preview player, auto-stop at 5 min, hardware track release, tab switcher).
 - [x] **Step 6:** Speaker detection (AssemblyAI diarization, speaker labels 1-N, start/end timestamps, chat-style view, multi-speaker badges & exports).
+- [x] **Step 7:** User authentication & ownership (JWT auth, bcrypt 12 rounds, rate limiting, protected user routes, login/register views, session restoration).
 

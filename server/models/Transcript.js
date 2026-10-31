@@ -2,10 +2,17 @@ import mongoose from 'mongoose';
 
 /**
  * Mongoose Schema for audio transcripts.
- * Stores transcription text, metadata, speaker segments, and creation timestamp.
+ * Stores transcription text, metadata, speaker segments, owner user ID, and timestamp.
  */
 const transcriptSchema = new mongoose.Schema(
   {
+    // Owner User reference (Step 7)
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Transcript must belong to a user'],
+      index: true,
+    },
     text: {
       type: String,
       required: [true, 'Transcription text is required'],

@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
 import { checkHealth, uploadAudio } from './api/transcriptApi.js';
+import { useAuth } from './context/AuthContext.jsx';
+import Login from './pages/Login.jsx';
+import Register from './pages/Register.jsx';
 import UploadBox from './components/UploadBox.jsx';
 import Recorder from './components/Recorder.jsx';
 import TranscriptResult from './components/TranscriptResult.jsx';
 import HistoryList from './components/HistoryList.jsx';
 
 function App() {
+  // Authentication State (Step 7)
+  const { user, loading: authLoading, logout, isAuthenticated } = useAuth();
+  const [authView, setAuthView] = useState('login'); // 'login' | 'register'
+
   // Server Health State (from Step 1)
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'connected' | 'down'
   const [lastChecked, setLastChecked] = useState(null);
@@ -19,11 +26,22 @@ function App() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // History Refresh Trigger (Step 4)
+  // History Refresh Trigger (Steps 4 & 7)
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
   // Backend Error State
   const [backendError, setBackendError] = useState(null);
+
+  /**
+   * Refresh history when authenticated user changes
+   */
+  useEffect(() => {
+    if (isAuthenticated) {
+      setHistoryRefreshTrigger((prev) => prev + 1);
+    } else {
+      setCurrentTranscript(null);
+    }
+  }, [isAuthenticated, user?.id]);
 
   /**
    * Verify backend server health
@@ -49,6 +67,15 @@ function App() {
   }, []);
 
   /**
+   * Handle user logout: wipes token and clears all active transcript state
+   */
+  const handleLogout = () => {
+    logout();
+    setCurrentTranscript(null);
+    setBackendError(null);
+  };
+
+  /**
    * Send audio file (uploaded or recorded) to backend for transcription or speaker diarization
    */
   const handleUploadAudio = async (file, options = {}) => {
@@ -62,7 +89,6 @@ function App() {
         file,
         (percent) => {
           setUploadProgress(percent);
-          // Once the upload reaches 100%, backend starts the AI transcription/diarization
           if (percent >= 100) {
             setIsUploading(false);
             setIsTranscribing(true);
@@ -73,12 +99,11 @@ function App() {
 
       if (response && response.data) {
         setCurrentTranscript(response.data);
-        // Automatically refresh history list when a new transcription finishes (Steps 4 & 5)
+        // Automatically refresh history list when a new transcription finishes
         setHistoryRefreshTrigger((prev) => prev + 1);
       }
     } catch (err) {
       console.error('Transcription request failed:', err);
-      // Extract clean error message from backend response if available
       const errorMsg =
         err.response?.data?.error ||
         err.response?.data?.message ||
@@ -104,57 +129,73 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 py-10 px-4 sm:px-6 lg:px-8 flex flex-col justify-between">
       <div className="max-w-3xl mx-auto w-full">
-        {/* Top Header & Server Health Status Bar */}
+        {/* Top Header & Navigation / Status Bar */}
         <header className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-800">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <span>🎙️ Audio to Text Transcriber</span>
             </h1>
             <p className="text-sm text-slate-400 mt-1">
-              Powered by Groq Whisper Large v3, Express, & React
+              AI-Powered Speech Transcription & Speaker Diarization
             </p>
           </div>
 
-          {/* Step 1 Health Indicator Pill */}
-          <div className="flex items-center space-x-3 bg-slate-800/90 border border-slate-700 px-3.5 py-1.5 rounded-xl shadow-sm self-start sm:self-auto">
-            <span className="text-xs text-slate-400 font-medium">Server:</span>
+          {/* Right Header: Server Health & User Profile / Logout */}
+          <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+            {/* Step 1 Health Indicator Pill */}
+            <div className="flex items-center space-x-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-sm text-xs">
+              <span className="text-slate-400 font-medium">Server:</span>
 
-            {serverStatus === 'checking' && (
-              <div className="flex items-center space-x-1.5 text-xs text-amber-400 font-medium">
-                <span className="animate-spin inline-block w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full" />
-                <span>Checking...</span>
+              {serverStatus === 'checking' && (
+                <div className="flex items-center space-x-1.5 text-amber-400 font-medium">
+                  <span className="animate-spin inline-block w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full" />
+                  <span>Checking...</span>
+                </div>
+              )}
+
+              {serverStatus === 'connected' && (
+                <div className="flex items-center space-x-1.5 text-emerald-400 font-semibold">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-950 animate-pulse" />
+                  <span>Online</span>
+                </div>
+              )}
+
+              {serverStatus === 'down' && (
+                <div className="flex items-center space-x-1.5 text-rose-400 font-semibold">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-rose-950" />
+                  <span>Offline</span>
+                </div>
+              )}
+
+              <button
+                onClick={handleCheckHealth}
+                disabled={serverStatus === 'checking'}
+                className="text-slate-400 hover:text-slate-200 transition-colors p-0.5 rounded"
+                title="Recheck Server Health"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Step 7 User Greeting & Logout Button */}
+            {isAuthenticated && user && (
+              <div className="flex items-center space-x-2 bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl shadow-sm text-xs">
+                <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                <span className="font-semibold text-slate-200 truncate max-w-[120px] sm:max-w-[160px]">
+                  {user.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="ml-1 pl-2 border-l border-slate-700 text-rose-400 hover:text-rose-300 font-medium transition"
+                  title="Sign out of your account"
+                >
+                  Logout
+                </button>
               </div>
             )}
-
-            {serverStatus === 'connected' && (
-              <div className="flex items-center space-x-1.5 text-xs text-emerald-400 font-semibold">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-950 animate-pulse" />
-                <span>Server connected</span>
-              </div>
-            )}
-
-            {serverStatus === 'down' && (
-              <div className="flex items-center space-x-1.5 text-xs text-rose-400 font-semibold">
-                <span className="h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-rose-950" />
-                <span>Server down</span>
-              </div>
-            )}
-
-            <button
-              onClick={handleCheckHealth}
-              disabled={serverStatus === 'checking'}
-              className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded hover:bg-slate-700/60"
-              title="Recheck Server Health"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-            </button>
           </div>
         </header>
 
@@ -163,11 +204,7 @@ function App() {
           <div className="mb-6 p-4 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 shadow-md flex items-start justify-between gap-3 animate-fadeIn">
             <div className="flex items-start space-x-3">
               <svg className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
               <div>
                 <h4 className="text-sm font-semibold text-rose-300">Backend Error</h4>
@@ -187,90 +224,103 @@ function App() {
           </div>
         )}
 
-        {/* Step 5: Mode Selector Tabs (Upload file | Record audio) */}
-        <div className="flex items-center justify-center mb-6">
-          <div className="flex bg-slate-800/90 p-1 rounded-2xl border border-slate-700/80 shadow-md">
-            <button
-              type="button"
-              onClick={() => setActiveTab('upload')}
-              className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-                activeTab === 'upload'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                />
-              </svg>
-              <span>Upload file</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('record')}
-              className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-                activeTab === 'record'
-                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                />
-              </svg>
-              <span>Record audio</span>
-            </button>
+        {/* Session Initializing Loader */}
+        {authLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-slate-400 space-y-3">
+            <svg className="animate-spin h-8 w-8 text-indigo-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-sm font-medium">Restoring session...</p>
           </div>
-        </div>
+        ) : !isAuthenticated ? (
+          /* Step 7: Unauthenticated View (Login / Register) */
+          <section aria-label="Authentication">
+            {authView === 'login' ? (
+              <Login onSwitchToRegister={() => setAuthView('register')} />
+            ) : (
+              <Register onSwitchToLogin={() => setAuthView('login')} />
+            )}
+          </section>
+        ) : (
+          /* Step 7: Authenticated View (Full Transcriber Workspace) */
+          <div className="space-y-6">
+            {/* Step 5: Mode Selector Tabs (Upload file | Record audio) */}
+            <div className="flex items-center justify-center">
+              <div className="flex bg-slate-800/90 p-1 rounded-2xl border border-slate-700/80 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('upload')}
+                  className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                    activeTab === 'upload'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <span>Upload file</span>
+                </button>
 
-        {/* Input Section: Upload Box OR Live Mic Recorder */}
-        <section aria-label="Input Section">
-          {activeTab === 'upload' ? (
-            <UploadBox
-              onUpload={handleUploadAudio}
-              isUploading={isUploading}
-              isTranscribing={isTranscribing}
-              uploadProgress={uploadProgress}
-            />
-          ) : (
-            <Recorder
-              onUpload={handleUploadAudio}
-              isUploading={isUploading}
-              isTranscribing={isTranscribing}
-              uploadProgress={uploadProgress}
-            />
-          )}
-        </section>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('record')}
+                  className={`flex items-center space-x-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                    activeTab === 'record'
+                      ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                  </svg>
+                  <span>Record audio</span>
+                </button>
+              </div>
+            </div>
 
-        {/* Current Transcription Output Display (Step 3) */}
-        <section aria-label="Current Transcription Result">
-          <TranscriptResult
-            transcript={currentTranscript}
-            onClear={() => setCurrentTranscript(null)}
-          />
-        </section>
+            {/* Input Section: Upload Box OR Live Mic Recorder */}
+            <section aria-label="Input Section">
+              {activeTab === 'upload' ? (
+                <UploadBox
+                  onUpload={handleUploadAudio}
+                  isUploading={isUploading}
+                  isTranscribing={isTranscribing}
+                  uploadProgress={uploadProgress}
+                />
+              ) : (
+                <Recorder
+                  onUpload={handleUploadAudio}
+                  isUploading={isUploading}
+                  isTranscribing={isTranscribing}
+                  uploadProgress={uploadProgress}
+                />
+              )}
+            </section>
 
-        {/* Transcript History List (Step 4) */}
-        <section aria-label="Transcription History">
-          <HistoryList
-            refreshTrigger={historyRefreshTrigger}
-            onTranscriptDeleted={handleTranscriptDeleted}
-          />
-        </section>
+            {/* Current Transcription Output Display (Step 3) */}
+            <section aria-label="Current Transcription Result">
+              <TranscriptResult
+                transcript={currentTranscript}
+                onClear={() => setCurrentTranscript(null)}
+              />
+            </section>
+
+            {/* Transcript History List (Scoped to logged-in user) */}
+            <section aria-label="Transcription History">
+              <HistoryList
+                refreshTrigger={historyRefreshTrigger}
+                onTranscriptDeleted={handleTranscriptDeleted}
+              />
+            </section>
+          </div>
+        )}
       </div>
 
       {/* Subtle Footer */}
       <footer className="text-center text-xs text-slate-500 mt-12">
-        <p>Audio to Text Transcriber &bull; MERN Stack Step 6 &bull; Groq Whisper & AssemblyAI Diarization</p>
+        <p>Audio to Text Transcriber &bull; MERN Stack Step 7 &bull; JWT Auth & Secure User Scoping</p>
       </footer>
     </div>
   );

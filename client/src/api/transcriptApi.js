@@ -10,6 +10,78 @@ const apiClient = axios.create({
 });
 
 /**
+ * Request Interceptor: Attach JWT Bearer token from localStorage to every request
+ */
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+/**
+ * Response Interceptor: On 401 unauthorized errors (session expired/invalid token),
+ * clear storage and notify app to return to login screen.
+ */
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      const url = error.config?.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // Dispatch custom window event so AuthContext can cleanly reset session state
+        window.dispatchEvent(new Event('auth:unauthorized'));
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ----------------- Authentication Endpoints (Step 7) ----------------- //
+
+/**
+ * Register a new user
+ * @param {string} name
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{ token: string, user: Object }>}
+ */
+export const registerUser = async (name, email, password) => {
+  const response = await apiClient.post('/auth/register', { name, email, password });
+  return response.data;
+};
+
+/**
+ * Log in an existing user
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{ token: string, user: Object }>}
+ */
+export const loginUser = async (email, password) => {
+  const response = await apiClient.post('/auth/login', { email, password });
+  return response.data;
+};
+
+/**
+ * Get currently authenticated user details
+ * @returns {Promise<{ user: Object }>}
+ */
+export const getMe = async () => {
+  const response = await apiClient.get('/auth/me');
+  return response.data;
+};
+
+// ----------------- Transcript Endpoints ----------------- //
+
+/**
  * Upload an audio file for transcription or speaker diarization.
  * 
  * @param {File} file - Audio file object from input or dropzone
@@ -19,7 +91,6 @@ const apiClient = axios.create({
  */
 export const uploadAudio = async (file, onProgress, options = {}) => {
   const formData = new FormData();
-  // Field name MUST match multer backend config: "audio"
   formData.append('audio', file);
 
   if (options?.detectSpeakers) {

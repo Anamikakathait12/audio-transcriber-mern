@@ -6,7 +6,8 @@ import { diarizeAudio } from '../services/diarizeService.js';
 
 /**
  * Upload and transcribe an audio file with optional speaker diarization,
- * persist transcript to MongoDB, and clean up temporary uploaded file.
+ * associate with authenticated user, persist transcript to MongoDB,
+ * and clean up temporary uploaded file.
  * POST /api/transcripts
  */
 export const transcribe = async (req, res, next) => {
@@ -39,8 +40,9 @@ export const transcribe = async (req, res, next) => {
       result = await transcribeAudio(file.path);
     }
 
-    // Persist transcript record in MongoDB
+    // Persist transcript record in MongoDB associated with logged-in user (Step 7)
     const newTranscript = await Transcript.create({
+      user: req.user._id,
       text: result.text,
       originalFileName: file.originalname,
       fileSize: file.size,
@@ -71,7 +73,7 @@ export const transcribe = async (req, res, next) => {
 };
 
 /**
- * Retrieve transcripts with search and pagination support.
+ * Retrieve transcripts belonging to logged-in user with search and pagination.
  * Query params:
  *   - search: string (matches text or originalFileName case-insensitively)
  *   - page: number (default 1)
@@ -82,9 +84,10 @@ export const getAllTranscripts = async (req, res, next) => {
   try {
     const { search, page = 1, limit = 10 } = req.query;
 
-    const query = {};
+    // Scope query strictly to authenticated user
+    const query = { user: req.user._id };
 
-    // Case-insensitive search on text and originalFileName
+    // Case-insensitive search on text and originalFileName inside user's own items
     if (search && search.trim() !== '') {
       const sanitizedSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const searchRegex = new RegExp(sanitizedSearch, 'i');
@@ -123,7 +126,8 @@ export const getAllTranscripts = async (req, res, next) => {
 };
 
 /**
- * Retrieve a single transcript by its MongoDB ID.
+ * Retrieve a single transcript by its MongoDB ID (only if owned by current user).
+ * Returns 404 for someone else's transcript.
  * GET /api/transcripts/:id
  */
 export const getTranscriptById = async (req, res, next) => {
@@ -134,7 +138,11 @@ export const getTranscriptById = async (req, res, next) => {
   }
 
   try {
-    const transcript = await Transcript.findById(id);
+    // Only return if it belongs to logged-in user
+    const transcript = await Transcript.findOne({
+      _id: id,
+      user: req.user._id,
+    });
 
     if (!transcript) {
       return res.status(404).json({ error: 'Transcript not found' });
@@ -147,7 +155,8 @@ export const getTranscriptById = async (req, res, next) => {
 };
 
 /**
- * Delete a transcript by its MongoDB ID.
+ * Delete a transcript by its MongoDB ID (only if owned by current user).
+ * Returns 404 for someone else's transcript.
  * DELETE /api/transcripts/:id
  */
 export const deleteTranscript = async (req, res, next) => {
@@ -158,7 +167,11 @@ export const deleteTranscript = async (req, res, next) => {
   }
 
   try {
-    const deletedTranscript = await Transcript.findByIdAndDelete(id);
+    // Only delete if it belongs to logged-in user
+    const deletedTranscript = await Transcript.findOneAndDelete({
+      _id: id,
+      user: req.user._id,
+    });
 
     if (!deletedTranscript) {
       return res.status(404).json({ error: 'Transcript not found' });
