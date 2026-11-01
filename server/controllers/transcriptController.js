@@ -22,7 +22,11 @@ export const transcribe = async (req, res, next) => {
   // Check if caller requested speaker detection
   const shouldDetectSpeakers =
     req.body?.detectSpeakers === 'true' || req.body?.detectSpeakers === true;
-  const targetLanguage = req.body?.language || 'hi';
+
+  // Validate language against allow-list, default to 'auto'
+  const ALLOWED_LANGUAGES = ['auto', 'en', 'hi'];
+  const rawLanguage = typeof req.body?.language === 'string' ? req.body.language.trim().toLowerCase() : '';
+  const targetLanguage = ALLOWED_LANGUAGES.includes(rawLanguage) ? rawLanguage : 'auto';
 
   try {
     let result;
@@ -30,7 +34,7 @@ export const transcribe = async (req, res, next) => {
     let speakerCount;
 
     if (shouldDetectSpeakers) {
-      // Step 6: Use AssemblyAI for speaker diarization
+      // Step 6: Use AssemblyAI for speaker diarization with language selection/detection
       result = await diarizeAudio(file.path, targetLanguage);
       segments = result.segments || [];
       const uniqueSpeakers = new Set(segments.map((s) => s.speaker));
@@ -59,6 +63,20 @@ export const transcribe = async (req, res, next) => {
       data: newTranscript,
     });
   } catch (error) {
+    const errorMsg = error.message || '';
+    const lowerMsg = errorMsg.toLowerCase();
+    if (
+      error.statusCode === 400 ||
+      lowerMsg.includes('confidence') ||
+      (lowerMsg.includes('detect') && lowerMsg.includes('language')) ||
+      lowerMsg.includes('select a language manually') ||
+      lowerMsg.includes('choose a language manually') ||
+      lowerMsg.includes('pick a language manually')
+    ) {
+      return res.status(400).json({
+        error: error.message || 'Automatic language detection failed or confidence was too low. Please pick a language manually and try again.',
+      });
+    }
     next(error);
   } finally {
     // Always remove the temporary uploaded file from the server disk

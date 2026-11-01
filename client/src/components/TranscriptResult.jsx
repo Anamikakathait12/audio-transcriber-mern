@@ -26,6 +26,21 @@ const formatTimestamp = (seconds) => {
 };
 
 /**
+ * Format language code to human-readable language name (e.g. "en" -> "English", "hi" -> "Hindi")
+ */
+const formatLanguageName = (lang) => {
+  if (!lang) return '';
+  const l = String(lang).toLowerCase().trim();
+  if (l === 'en' || l.startsWith('en_') || l.startsWith('en-') || l === 'english') return 'English';
+  if (l === 'hi' || l.startsWith('hi_') || l.startsWith('hi-') || l === 'hindi') return 'Hindi';
+  if (l === 'es' || l === 'spanish') return 'Spanish';
+  if (l === 'fr' || l === 'french') return 'French';
+  if (l === 'de' || l === 'german') return 'German';
+  if (l === 'auto') return 'Auto-detected';
+  return l.toUpperCase();
+};
+
+/**
  * Light pastel color themes for speakers
  */
 const SPEAKER_THEMES = [
@@ -206,7 +221,7 @@ function TranscriptResult({ transcript, onClear }) {
         {language && (
           <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
             <Globe className="w-3.5 h-3.5 text-slate-600" />
-            <span className="font-medium uppercase">{language}</span>
+            <span className="font-medium">{formatLanguageName(language)}</span>
           </div>
         )}
 

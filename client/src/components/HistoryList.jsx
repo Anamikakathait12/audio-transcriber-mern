@@ -44,6 +44,21 @@ const formatTimestamp = (seconds) => {
 };
 
 /**
+ * Format language code to human-readable language name (e.g. "en" -> "English", "hi" -> "Hindi")
+ */
+const formatLanguageName = (lang) => {
+  if (!lang) return '';
+  const l = String(lang).toLowerCase().trim();
+  if (l === 'en' || l.startsWith('en_') || l.startsWith('en-') || l === 'english') return 'English';
+  if (l === 'hi' || l.startsWith('hi_') || l.startsWith('hi-') || l === 'hindi') return 'Hindi';
+  if (l === 'es' || l === 'spanish') return 'Spanish';
+  if (l === 'fr' || l === 'french') return 'French';
+  if (l === 'de' || l === 'german') return 'German';
+  if (l === 'auto') return 'Auto-detected';
+  return l.toUpperCase();
+};
+
+/**
  * Light pastel color themes for speakers
  */
 const SPEAKER_THEMES = [
@@ -404,7 +419,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                         {item.language && (
                           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-slate-50 border border-slate-200">
                             <Globe className="w-3 h-3 text-slate-600" />
-                            <span className="uppercase font-medium text-slate-700">{item.language}</span>
+                            <span className="font-medium text-slate-700">{formatLanguageName(item.language)}</span>
                           </span>
                         )}
 

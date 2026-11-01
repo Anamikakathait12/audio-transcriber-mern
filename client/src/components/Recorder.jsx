@@ -33,6 +33,7 @@ function Recorder({
   const [audioUrl, setAudioUrl] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [internalDetectSpeakers, setInternalDetectSpeakers] = useState(false);
+  const [language, setLanguage] = useState('auto');
 
   const detectSpeakers = externalDetectSpeakers !== undefined ? externalDetectSpeakers : internalDetectSpeakers;
   const setDetectSpeakers = externalSetDetectSpeakers !== undefined ? externalSetDetectSpeakers : setInternalDetectSpeakers;
@@ -226,7 +227,7 @@ function Recorder({
     const fileName = `recording-${timestamp}.webm`;
     const audioFile = new File([recordedBlob], fileName, { type: 'audio/webm' });
 
-    onUpload(audioFile, { detectSpeakers });
+    onUpload(audioFile, { detectSpeakers, language });
   };
 
   const isBusy = isUploading || isTranscribing;
@@ -353,9 +354,9 @@ function Recorder({
         )}
       </div>
 
-      {/* Speaker Detection Toggle for Recordings */}
-      <div className="mt-4 p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200">
-        <div className="flex items-center justify-between">
+      {/* Speaker Detection Toggle & Language Selection for Recordings */}
+      <div className="mt-4 p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 flex items-center justify-center flex-shrink-0">
               <Users className="w-4 h-4" />
@@ -370,25 +371,57 @@ function Recorder({
             </div>
           </div>
 
-          {/* Toggle Switch */}
-          <button
-            type="button"
-            role="switch"
-            aria-checked={detectSpeakers}
-            onClick={() => setDetectSpeakers(!detectSpeakers)}
-            disabled={isBusy}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
-              detectSpeakers ? 'bg-indigo-600' : 'bg-slate-200'
-            } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-150 ease-in-out ${
-                detectSpeakers ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <div className="flex items-center space-x-3 self-end sm:self-auto">
+            {/* Language Select */}
+            <div className="flex items-center space-x-1.5">
+              <label
+                htmlFor="recorder-language-select"
+                className={`text-xs font-medium ${detectSpeakers ? 'text-slate-700' : 'text-slate-400'}`}
+              >
+                Language:
+              </label>
+              <select
+                id="recorder-language-select"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                disabled={!detectSpeakers || isBusy}
+                className={`text-xs py-1 px-2.5 rounded-lg border bg-white transition duration-150 focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+                  detectSpeakers && !isBusy
+                    ? 'border-slate-300 text-slate-800 cursor-pointer hover:border-slate-400'
+                    : 'border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+              </select>
+            </div>
+
+            {/* Toggle Switch */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={detectSpeakers}
+              onClick={() => setDetectSpeakers(!detectSpeakers)}
+              disabled={isBusy}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
+                detectSpeakers ? 'bg-indigo-600' : 'bg-slate-200'
+              } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-150 ease-in-out ${
+                  detectSpeakers ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
+
+        {/* Mixed language helper text */}
+        <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 leading-relaxed">
+          Auto-detect picks one language for the whole file. For mixed Hindi-English speech, choose a language manually.
+        </p>
       </div>
 
       {/* Upload & Transcription Progress Indicator */}
