@@ -25,7 +25,8 @@ speech-to-text/
 │   │   └── transcriptRoutes.js   # /api/transcripts routing (protected)
 │   ├── services/
 │   │   ├── diarizeService.js     # AssemblyAI speaker diarization client
-│   │   └── transcribeService.js  # Isolated Groq Whisper API client
+│   │   ├── transcribeService.js  # Isolated Groq Whisper API client
+│   │   └── translateService.js   # Groq Chat translation service (English & Hindi)
 │   ├── uploads/                  # Temporary file processing directory
 │   ├── .env.example              # Environment variables template
 │   ├── package.json              # Server dependencies & scripts (ES modules)
@@ -116,6 +117,7 @@ Before running the application, make sure you have:
    PORT=5000
    MONGO_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/audio_transcriber?retryWrites=true&w=majority
    GROQ_API_KEY=gsk_your_groq_api_key_here
+   GROQ_CHAT_MODEL=openai/gpt-oss-120b
    ASSEMBLY_API_KEY=your_assemblyai_api_key_here
    ```
 
@@ -252,6 +254,33 @@ Base URL: `http://localhost:5000`
 
 ---
 
+### 6. Translate Transcript
+- **`POST /api/transcripts/:id/translate`**
+- **Headers**: `Authorization: Bearer <token>`
+- **Body**:
+  ```json
+  {
+    "target": "en"
+  }
+  ```
+  *(Supported targets: `"en"` or `"hi"`)*
+- **Response `200 OK`**:
+  ```json
+  {
+    "message": "Transcript translated to English successfully",
+    "data": { ... },
+    "translation": {
+      "text": "Full translated transcript text...",
+      "segments": ["Translated segment 1", "Translated segment 2"],
+      "generatedAt": "2026-11-01T11:00:00.000Z"
+    }
+  }
+  ```
+- **Rate Limit**: 30 translation requests per hour per user.
+- **Caching**: Cached translation is returned instantly on repeat requests.
+
+---
+
 ## 🛡️ Error Handling & File Safeguards
 
 The backend has built-in global error-handling for upload and validation edge cases:
@@ -279,4 +308,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 6:** Speaker detection (AssemblyAI diarization, speaker labels 1-N, start/end timestamps, chat-style view, multi-speaker badges & exports).
 - [x] **Step 7:** User authentication & ownership (JWT auth, bcrypt 12 rounds, rate limiting, protected user routes, login/register views, session restoration).
 - [x] **Step 8:** UI redesign into a clean SaaS dashboard (Slate-50 light theme, Inter + Instrument Serif typography, fixed left sidebar, mobile drawer, sticky topbar with global search & health pill, gradient hero, 3 quick action tiles, 6-card recent grid, and soft pastel speaker styling).
+- [x] **Step 9:** Transcript translation (Groq LLM chat completions with `GROQ_CHAT_MODEL`, English & Hindi translation, JSON array batching & alignment, cached translations, segmented switcher in UI, speaker chat-bubble text swapping, UTF-8 download, and history badges).
 

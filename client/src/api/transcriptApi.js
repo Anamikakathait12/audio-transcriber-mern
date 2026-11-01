@@ -151,6 +151,18 @@ export const deleteTranscript = async (id) => {
 };
 
 /**
+ * Translate a transcript to target language ("en" | "hi").
+ * 
+ * @param {string} id - MongoDB transcript ID
+ * @param {'en' | 'hi'} target - Target language code
+ * @returns {Promise<{ message: string, data: Object, translation: Object }>}
+ */
+export const translateTranscript = async (id, target) => {
+  const response = await apiClient.post(`/transcripts/${id}/translate`, { target });
+  return response.data;
+};
+
+/**
  * Check backend server health status.
  * 
  * @returns {Promise<Object>} Health check payload { status: 'ok' }

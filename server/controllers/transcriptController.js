@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Transcript from '../models/Transcript.js';
 import { transcribeAudio } from '../services/transcribeService.js';
 import { diarizeAudio } from '../services/diarizeService.js';
+import { translateTexts } from '../services/translateService.js';
 
 /**
  * Upload and transcribe an audio file with optional speaker diarization,
@@ -201,5 +202,110 @@ export const deleteTranscript = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+/**
+ * Translate a transcript to target language ('en' or 'hi') using Groq Chat Completions.
+ * Caches results in MongoDB so subsequent requests are instantaneous.
+ * POST /api/transcripts/:id/translate
+ */
+export const translateTranscript = async (req, res, next) => {
+  const { id } = req.params;
+  const { target } = req.body;
+
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({ error: 'Invalid transcript ID format' });
+  }
+
+  // Validate target language against allow-list
+  const ALLOWED_TARGETS = ['en', 'hi'];
+  if (!target || !ALLOWED_TARGETS.includes(String(target).toLowerCase().trim())) {
+    return res.status(400).json({
+      error: 'Invalid target language. Supported target languages are "en" (English) and "hi" (Hindi).',
+    });
+  }
+
+  const targetLang = String(target).toLowerCase().trim();
+
+  try {
+    // Only allow owner to translate
+    const transcript = await Transcript.findOne({
+      _id: id,
+      user: req.user._id,
+    });
+
+    if (!transcript) {
+      return res.status(404).json({ error: 'Transcript not found' });
+    }
+
+    // Check if target is the same as the transcript's detected language
+    const normLang = (transcript.language || '').toLowerCase().trim();
+    const isAudioEnglish =
+      normLang === 'en' ||
+      normLang.startsWith('en_') ||
+      normLang.startsWith('en-') ||
+      normLang === 'english';
+    const isAudioHindi =
+      normLang === 'hi' ||
+      normLang.startsWith('hi_') ||
+      normLang.startsWith('hi-') ||
+      normLang === 'hindi';
+
+    if ((targetLang === 'en' && isAudioEnglish) || (targetLang === 'hi' && isAudioHindi)) {
+      return res.status(400).json({
+        error: `Transcript is already in ${targetLang === 'en' ? 'English' : 'Hindi'}. Translation is not needed.`,
+      });
+    }
+
+    // If a cached translation exists, return it immediately without calling Groq
+    if (transcript.translations && transcript.translations[targetLang]?.text) {
+      return res.status(200).json({
+        message: 'Translation retrieved from cache',
+        data: transcript,
+        translation: transcript.translations[targetLang],
+      });
+    }
+
+    let fullText = '';
+    let translatedSegments = [];
+
+    // If transcript has segments, translate segment texts so bubble alignment is preserved
+    if (Array.isArray(transcript.segments) && transcript.segments.length > 0) {
+      const segmentTexts = transcript.segments.map((seg) => seg.text || '');
+      translatedSegments = await translateTexts(segmentTexts, targetLang);
+      fullText = translatedSegments.join('\n\n');
+    } else {
+      // Otherwise translate the full single text
+      const results = await translateTexts([transcript.text], targetLang);
+      fullText = results[0] || '';
+      translatedSegments = [];
+    }
+
+    // Cache the translation inside transcript
+    if (!transcript.translations) {
+      transcript.translations = {};
+    }
+
+    transcript.translations[targetLang] = {
+      text: fullText,
+      segments: translatedSegments,
+      generatedAt: new Date(),
+    };
+
+    // Mark modified since translations is a sub-document
+    transcript.markModified('translations');
+    await transcript.save();
+
+    return res.status(200).json({
+      message: `Transcript translated to ${targetLang === 'en' ? 'English' : 'Hindi'} successfully`,
+      data: transcript,
+      translation: transcript.translations[targetLang],
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || error.status || 500;
+    return res.status(statusCode).json({
+      error: error.message || 'Translation failed. Please try again.',
+    });
   }
 };

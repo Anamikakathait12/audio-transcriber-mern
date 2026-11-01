@@ -48,6 +48,21 @@ const transcriptSchema = new mongoose.Schema(
       type: Number,
       required: false,
     },
+    // Optional translations in English and Hindi (Step 9)
+    translations: {
+      en: {
+        text: { type: String, trim: true },
+        segments: [{ type: String, trim: true }],
+        generatedAt: { type: Date },
+        _id: false,
+      },
+      hi: {
+        text: { type: String, trim: true },
+        segments: [{ type: String, trim: true }],
+        generatedAt: { type: Date },
+        _id: false,
+      },
+    },
     createdAt: {
       type: Date,
       default: Date.now,

@@ -1,5 +1,18 @@
-import { useState } from 'react';
-import { Copy, Download, Check, Users, Clock, Globe, Calendar, X, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  Copy,
+  Download,
+  Check,
+  Users,
+  Clock,
+  Globe,
+  Calendar,
+  X,
+  Loader2,
+  AlertCircle,
+  Languages,
+} from 'lucide-react';
+import { translateTranscript } from '../api/transcriptApi.js';
 
 /**
  * Format duration in seconds to a human-friendly string (e.g. "1m 14s" or "24s")
@@ -88,24 +101,23 @@ const getSpeakerTheme = (speakerNum) => {
 };
 
 /**
- * Generate formatted export text (including speaker labels if segments exist)
- */
-const getFormattedExportText = (transcript) => {
-  if (transcript.segments && transcript.segments.length > 0) {
-    return transcript.segments
-      .map((seg) => `Speaker ${seg.speaker}: ${seg.text}`)
-      .join('\n\n');
-  }
-  return transcript.text || '';
-};
-
-/**
  * TranscriptResult Component
- * Displays transcription result, metadata (language, duration),
- * chat-style speaker diarization view, and UTF-8 copy/export in clean light theme.
+ * Displays transcription result, metadata, chat-style speaker diarization,
+ * segmented language translation switcher (Original | English | हिन्दी), and UTF-8 copy/export.
  */
 function TranscriptResult({ transcript, onClear }) {
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState('original'); // 'original' | 'en' | 'hi'
+  const [translations, setTranslations] = useState(transcript?.translations || {});
+  const [translatingLang, setTranslatingLang] = useState(null); // 'en' | 'hi' | null
+  const [translateError, setTranslateError] = useState(null);
+
+  // Sync state if transcript prop changes
+  useEffect(() => {
+    setTranslations(transcript?.translations || {});
+    setActiveTab('original');
+    setTranslateError(null);
+  }, [transcript?._id, transcript?.translations]);
 
   if (!transcript) return null;
 
@@ -113,9 +125,90 @@ function TranscriptResult({ transcript, onClear }) {
   const hasSegments = Array.isArray(segments) && segments.length > 0;
   const detectedSpeakers = speakerCount || (hasSegments ? new Set(segments.map((s) => s.speaker)).size : 0);
 
-  // Handle Copy to Clipboard (including speaker labels if available)
+  // Determine transcript language to conditionally hide redundant translation option
+  const normLang = (language || '').toLowerCase().trim();
+  const isEnglish = normLang === 'en' || normLang.startsWith('en_') || normLang.startsWith('en-') || normLang === 'english';
+  const isHindi = normLang === 'hi' || normLang.startsWith('hi_') || normLang.startsWith('hi-') || normLang === 'hindi';
+
+  const languageOptions = [
+    { id: 'original', label: 'Original' },
+    !isEnglish && { id: 'en', label: 'English' },
+    !isHindi && { id: 'hi', label: 'हिन्दी' },
+  ].filter(Boolean);
+
+  /**
+   * Handle switching between Original, English, and Hindi versions
+   */
+  const handleTabSwitch = async (targetId) => {
+    setTranslateError(null);
+
+    if (targetId === 'original') {
+      setActiveTab('original');
+      return;
+    }
+
+    // If cached in state, instant switch
+    if (translations[targetId]?.text) {
+      setActiveTab(targetId);
+      return;
+    }
+
+    if (!transcript._id) {
+      setTranslateError('Transcript record must be saved before translating.');
+      return;
+    }
+
+    // Otherwise call backend Groq translation
+    setTranslatingLang(targetId);
+    try {
+      const res = await translateTranscript(transcript._id, targetId);
+      if (res && res.translation) {
+        setTranslations((prev) => ({
+          ...prev,
+          [targetId]: res.translation,
+        }));
+        setActiveTab(targetId);
+      }
+    } catch (err) {
+      console.error('Translation failed:', err);
+      const msg =
+        err.response?.data?.error ||
+        err.message ||
+        'Translation request failed. Please try again.';
+      setTranslateError(msg);
+    } finally {
+      setTranslatingLang(null);
+    }
+  };
+
+  /**
+   * Generate text to copy/download based on currently active view (Original, English, or Hindi)
+   */
+  const getActiveExportText = () => {
+    if (activeTab === 'original') {
+      if (hasSegments) {
+        return segments.map((seg) => `Speaker ${seg.speaker}: ${seg.text}`).join('\n\n');
+      }
+      return text || '';
+    }
+
+    const currentTrans = translations[activeTab];
+    if (!currentTrans) {
+      return text || '';
+    }
+
+    if (hasSegments && Array.isArray(currentTrans.segments) && currentTrans.segments.length > 0) {
+      return segments
+        .map((seg, idx) => `Speaker ${seg.speaker}: ${currentTrans.segments[idx] || seg.text}`)
+        .join('\n\n');
+    }
+
+    return currentTrans.text || text || '';
+  };
+
+  // Handle Copy to Clipboard
   const handleCopy = async () => {
-    const exportText = getFormattedExportText(transcript);
+    const exportText = getActiveExportText();
     if (!exportText) return;
 
     try {
@@ -127,9 +220,9 @@ function TranscriptResult({ transcript, onClear }) {
     }
   };
 
-  // Handle Download as .txt file (with UTF-8 BOM so Hindi and non-Latin scripts open cleanly)
+  // Handle Download as .txt file with UTF-8 BOM and language suffix (e.g. name-en.txt)
   const handleDownload = () => {
-    const exportText = getFormattedExportText(transcript);
+    const exportText = getActiveExportText();
     if (!exportText) return;
 
     const blob = new Blob(['\uFEFF' + exportText], { type: 'text/plain;charset=utf-8' });
@@ -139,13 +232,16 @@ function TranscriptResult({ transcript, onClear }) {
     const baseName = originalFileName
       ? originalFileName.replace(/\.[^/.]+$/, '')
       : 'transcript';
+    const suffix = activeTab === 'original' ? '' : `-${activeTab}`;
     link.href = url;
-    link.download = `${baseName}.txt`;
+    link.download = `${baseName}${suffix}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  const activeTranslation = activeTab !== 'original' ? translations[activeTab] : null;
 
   return (
     <div className="w-full bg-white rounded-2xl border border-slate-200 p-6 sm:p-7 transition-all duration-150 animate-fadeIn">
@@ -216,41 +312,98 @@ function TranscriptResult({ transcript, onClear }) {
         </div>
       </div>
 
-      {/* Metadata Badges Bar */}
-      <div className="flex flex-wrap items-center gap-2 pt-4 pb-4">
-        {language && (
-          <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
-            <Globe className="w-3.5 h-3.5 text-slate-600" />
-            <span className="font-medium">{formatLanguageName(language)}</span>
-          </div>
-        )}
+      {/* Metadata Badges & Segmented Language Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 pb-3">
+        {/* Badges Bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {language && (
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
+              <Globe className="w-3.5 h-3.5 text-slate-600" />
+              <span className="font-medium">{formatLanguageName(language)}</span>
+            </div>
+          )}
 
-        <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
-          <Clock className="w-3.5 h-3.5 text-slate-600" />
-          <span>{formatDuration(duration)}</span>
+          <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
+            <Clock className="w-3.5 h-3.5 text-slate-600" />
+            <span>{formatDuration(duration)}</span>
+          </div>
+
+          {hasSegments && (
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-700 font-medium">
+              <Users className="w-3.5 h-3.5 text-indigo-600" />
+              <span>
+                {detectedSpeakers} {detectedSpeakers === 1 ? 'Speaker' : 'Speakers'} Detected
+              </span>
+            </div>
+          )}
+
+          {createdAt && (
+            <div className="hidden lg:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700">
+              <Calendar className="w-3.5 h-3.5 text-slate-600" />
+              <span>{new Date(createdAt).toLocaleDateString()}</span>
+            </div>
+          )}
         </div>
 
-        {hasSegments && (
-          <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-700 font-medium">
-            <Users className="w-3.5 h-3.5 text-indigo-600" />
-            <span>{detectedSpeakers} {detectedSpeakers === 1 ? 'Speaker' : 'Speakers'} Detected</span>
-          </div>
-        )}
+        {/* Translation Segmented Switch */}
+        <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-xl border border-slate-200/80 self-start sm:self-auto">
+          <Languages className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-0.5 hidden sm:block" />
+          {languageOptions.map((opt) => {
+            const isActive = activeTab === opt.id;
+            const isLoading = translatingLang === opt.id;
+            const isCached = opt.id !== 'original' && Boolean(translations[opt.id]?.text);
 
-        {createdAt && (
-          <div className="hidden sm:inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 ml-auto">
-            <Calendar className="w-3.5 h-3.5 text-slate-600" />
-            <span>{new Date(createdAt).toLocaleDateString()}</span>
-          </div>
-        )}
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => handleTabSwitch(opt.id)}
+                disabled={translatingLang !== null}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition duration-150 flex items-center space-x-1.5 ${
+                  isActive
+                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                } ${translatingLang !== null && !isActive ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {isLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />}
+                <span>{opt.label}</span>
+                {isCached && !isActive && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Cached translation" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {/* Translation Error Alert */}
+      {translateError && (
+        <div className="mt-2 mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between animate-fadeIn">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+            <span>{translateError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTranslateError(null)}
+            className="text-rose-400 hover:text-rose-600 font-bold ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Transcript Body: Speaker Segments or Plain Text */}
-      <div className="mt-2">
+      <div className="mt-3">
         {hasSegments ? (
           <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
             {segments.map((segment, index) => {
               const theme = getSpeakerTheme(segment.speaker);
+              const bubbleText =
+                activeTranslation && Array.isArray(activeTranslation.segments) && activeTranslation.segments[index]
+                  ? activeTranslation.segments[index]
+                  : segment.text;
+
               return (
                 <div
                   key={index}
@@ -258,7 +411,9 @@ function TranscriptResult({ transcript, onClear }) {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
-                      <div className={`w-6 h-6 rounded-md ${theme.avatar} text-xs font-bold flex items-center justify-center shadow-xs`}>
+                      <div
+                        className={`w-6 h-6 rounded-md ${theme.avatar} text-xs font-bold flex items-center justify-center shadow-xs`}
+                      >
                         {segment.speaker}
                       </div>
                       <span className="text-xs font-bold text-slate-900">
@@ -274,7 +429,7 @@ function TranscriptResult({ transcript, onClear }) {
                   </div>
 
                   <p className="text-sm text-slate-800 leading-relaxed font-normal whitespace-pre-wrap">
-                    {segment.text}
+                    {bubbleText}
                   </p>
                 </div>
               );
@@ -283,7 +438,7 @@ function TranscriptResult({ transcript, onClear }) {
         ) : (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 max-h-[360px] overflow-y-auto">
             <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-              {text}
+              {activeTranslation?.text || text}
             </p>
           </div>
         )}

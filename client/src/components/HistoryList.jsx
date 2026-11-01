@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getTranscripts, deleteTranscript } from '../api/transcriptApi.js';
+import { getTranscripts, deleteTranscript, translateTranscript } from '../api/transcriptApi.js';
 import {
   Search,
   FileText,
@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Loader2,
   Inbox,
+  Languages,
 } from 'lucide-react';
 
 /**
@@ -110,19 +111,39 @@ const formatDate = (dateString) => {
 
 /**
  * Generate formatted export text (including speaker labels if segments exist)
+ * dynamically taking the active translation tab into account
  */
-const getFormattedItemText = (item) => {
-  if (item.segments && item.segments.length > 0) {
+const getItemExportText = (item, activeTab = 'original') => {
+  const hasSegments = Array.isArray(item.segments) && item.segments.length > 0;
+
+  if (activeTab === 'original') {
+    if (hasSegments) {
+      return item.segments.map((seg) => `Speaker ${seg.speaker}: ${seg.text}`).join('\n\n');
+    }
+    return item.text || '';
+  }
+
+  const currentTrans = item.translations?.[activeTab];
+  if (!currentTrans) {
+    if (hasSegments) {
+      return item.segments.map((seg) => `Speaker ${seg.speaker}: ${seg.text}`).join('\n\n');
+    }
+    return item.text || '';
+  }
+
+  if (hasSegments && Array.isArray(currentTrans.segments) && currentTrans.segments.length > 0) {
     return item.segments
-      .map((seg) => `Speaker ${seg.speaker}: ${seg.text}`)
+      .map((seg, idx) => `Speaker ${seg.speaker}: ${currentTrans.segments[idx] || seg.text}`)
       .join('\n\n');
   }
-  return item.text || '';
+
+  return currentTrans.text || item.text || '';
 };
 
 /**
  * HistoryList Component
- * Displays searchable, paginated transcription history in a clean SaaS layout.
+ * Displays searchable, paginated transcription history with segmented translation switcher,
+ * speaker badges & chat-style diarization view, copy/download actions, and deletion.
  */
 function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setExternalSearch }) {
   const [transcripts, setTranscripts] = useState([]);
@@ -141,6 +162,11 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
   const [copiedId, setCopiedId] = useState(null);
   const [deletingId, setDeletingId] = useState(null); // ID pending confirmation
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Step 9 Translation States for expanded items
+  const [itemActiveTabs, setItemActiveTabs] = useState({}); // { [id]: 'original' | 'en' | 'hi' }
+  const [translatingItem, setTranslatingItem] = useState(null); // { id, target }
+  const [itemTranslateErrors, setItemTranslateErrors] = useState({}); // { [id]: string }
 
   // Sync external search term from Topbar if it changes
   useEffect(() => {
@@ -205,11 +231,63 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
   };
 
   /**
-   * Copy transcript text to clipboard (including speaker labels if diarized)
+   * Handle switching between Original, English, and Hindi versions for an item
+   */
+  const handleHistoryTabSwitch = async (e, item, targetId) => {
+    e.stopPropagation();
+    setItemTranslateErrors((prev) => ({ ...prev, [item._id]: null }));
+
+    if (targetId === 'original') {
+      setItemActiveTabs((prev) => ({ ...prev, [item._id]: 'original' }));
+      return;
+    }
+
+    // If already translated and cached, instant switch
+    if (item.translations?.[targetId]?.text) {
+      setItemActiveTabs((prev) => ({ ...prev, [item._id]: targetId }));
+      return;
+    }
+
+    setTranslatingItem({ id: item._id, target: targetId });
+    try {
+      const res = await translateTranscript(item._id, targetId);
+      if (res && res.translation) {
+        // Update item in local list with cached translation
+        setTranscripts((prevList) =>
+          prevList.map((t) => {
+            if (t._id === item._id) {
+              return {
+                ...t,
+                translations: {
+                  ...(t.translations || {}),
+                  [targetId]: res.translation,
+                },
+              };
+            }
+            return t;
+          })
+        );
+        setItemActiveTabs((prev) => ({ ...prev, [item._id]: targetId }));
+      }
+    } catch (err) {
+      console.error('History item translation error:', err);
+      const msg =
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to translate transcript.';
+      setItemTranslateErrors((prev) => ({ ...prev, [item._id]: msg }));
+    } finally {
+      setTranslatingItem(null);
+    }
+  };
+
+  /**
+   * Copy transcript text to clipboard (matches currently active translation tab)
    */
   const handleCopy = async (e, item) => {
     e.stopPropagation();
-    const exportText = getFormattedItemText(item);
+    const activeTab = itemActiveTabs[item._id] || 'original';
+    const exportText = getItemExportText(item, activeTab);
     if (!exportText) return;
 
     try {
@@ -222,14 +300,15 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
   };
 
   /**
-   * Download transcript as a UTF-8 encoded .txt file (with BOM for Hindi / Devanagari fidelity)
+   * Download transcript as a UTF-8 encoded .txt file with language suffix
    */
   const handleDownload = (e, item) => {
     e.stopPropagation();
-    const exportText = getFormattedItemText(item);
+    const activeTab = itemActiveTabs[item._id] || 'original';
+    const exportText = getItemExportText(item, activeTab);
     if (!exportText) return;
 
-    // Prepended \uFEFF Byte Order Mark ensures Windows Notepad renders Hindi and non-Latin scripts correctly
+    // Prepended \uFEFF Byte Order Mark ensures Windows Notepad renders Hindi correctly
     const blob = new Blob(['\uFEFF' + exportText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -237,9 +316,10 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
     const cleanBaseName = item.originalFileName
       ? item.originalFileName.replace(/\.[^/.]+$/, '')
       : 'audio-transcript';
+    const suffix = activeTab === 'original' ? '' : `-${activeTab}`;
 
     link.href = url;
-    link.download = `${cleanBaseName}.txt`;
+    link.download = `${cleanBaseName}${suffix}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -288,7 +368,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
             )}
           </div>
           <p className="text-xs text-slate-600 mt-1">
-            Search, review, copy, or download past audio transcriptions
+            Search, review, copy, translate, or download past audio transcriptions
           </p>
         </div>
 
@@ -372,11 +452,32 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
             const isCopied = copiedId === item._id;
             const isPendingDelete = deletingId === item._id;
             const hasSegments = Array.isArray(item.segments) && item.segments.length > 0;
-            const speakerCount = item.speakerCount || (hasSegments ? new Set(item.segments.map((s) => s.speaker)).size : 0);
+            const speakerCount =
+              item.speakerCount || (hasSegments ? new Set(item.segments.map((s) => s.speaker)).size : 0);
 
             // Preview: first ~100 characters
             const rawText = item.text || (hasSegments ? item.segments.map((s) => s.text).join(' ') : '');
             const textPreview = rawText.length > 110 ? `${rawText.slice(0, 110).trim()}...` : rawText;
+
+            // Check transcript language to hide redundant translation tab
+            const normLang = (item.language || '').toLowerCase().trim();
+            const isEnglish = normLang === 'en' || normLang.startsWith('en_') || normLang.startsWith('en-') || normLang === 'english';
+            const isHindi = normLang === 'hi' || normLang.startsWith('hi_') || normLang.startsWith('hi-') || normLang === 'hindi';
+
+            const languageOptions = [
+              { id: 'original', label: 'Original' },
+              !isEnglish && { id: 'en', label: 'English' },
+              !isHindi && { id: 'hi', label: 'हिन्दी' },
+            ].filter(Boolean);
+
+            const activeTab = itemActiveTabs[item._id] || 'original';
+            const currentTrans = activeTab !== 'original' ? item.translations?.[activeTab] : null;
+            const isTranslatingThis = translatingItem && translatingItem.id === item._id;
+            const itemError = itemTranslateErrors[item._id];
+
+            // Badges for existing translations
+            const hasEnglishTranslation = Boolean(item.translations?.en?.text);
+            const hasHindiTranslation = Boolean(item.translations?.hi?.text);
 
             return (
               <div
@@ -392,7 +493,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                 <div className="p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
                     <div className="min-w-0 flex-1">
-                      {/* File Name & Speaker Diarization Badge */}
+                      {/* File Name, Speaker Diarization Badge, and Translation Badges */}
                       <div className="flex flex-wrap items-center gap-2">
                         <FileText className="w-4 h-4 text-slate-600 flex-shrink-0" />
                         <span className="font-semibold text-sm sm:text-base text-slate-900 truncate">
@@ -403,6 +504,24 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                             <Users className="w-3 h-3 text-indigo-600" />
                             <span>{speakerCount} {speakerCount === 1 ? 'speaker' : 'speakers'}</span>
+                          </span>
+                        )}
+
+                        {/* Translation Available Badges */}
+                        {hasEnglishTranslation && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"
+                            title="English translation saved"
+                          >
+                            EN
+                          </span>
+                        )}
+                        {hasHindiTranslation && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            title="Hindi translation saved"
+                          >
+                            HI
                           </span>
                         )}
                       </div>
@@ -514,15 +633,46 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                     onClick={(e) => e.stopPropagation()}
                     className="p-4 sm:p-5 pt-0 border-t border-slate-100 bg-slate-50/50 rounded-b-xl space-y-3"
                   >
-                    <div className="flex items-center justify-between pt-3 pb-1">
-                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                        Full Transcript Text
-                      </span>
-                      <div className="flex items-center space-x-2">
+                    {/* Translation Segmented Switch & Copy/Download Actions Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-3 pb-1">
+                      {/* Segmented Switch */}
+                      <div className="flex items-center space-x-1 p-1 bg-slate-200/70 rounded-xl border border-slate-200/80">
+                        <Languages className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-0.5 hidden sm:block" />
+                        {languageOptions.map((opt) => {
+                          const isActive = activeTab === opt.id;
+                          const isLoading =
+                            isTranslatingThis && translatingItem.target === opt.id;
+                          const isCached =
+                            opt.id !== 'original' && Boolean(item.translations?.[opt.id]?.text);
+
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={(e) => handleHistoryTabSwitch(e, item, opt.id)}
+                              disabled={isTranslatingThis}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition duration-150 flex items-center space-x-1.5 ${
+                                isActive
+                                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                              } ${isTranslatingThis && !isActive ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            >
+                              {isLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />}
+                              <span>{opt.label}</span>
+                              {isCached && !isActive && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Translation cached" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Copy & Download Current View */}
+                      <div className="flex items-center space-x-2 self-end sm:self-auto">
                         <button
                           type="button"
                           onClick={(e) => handleCopy(e, item)}
-                          className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1"
+                          className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200"
                         >
                           <Copy className="w-3.5 h-3.5" />
                           <span>{isCopied ? 'Copied' : 'Copy'}</span>
@@ -530,7 +680,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                         <button
                           type="button"
                           onClick={(e) => handleDownload(e, item)}
-                          className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1"
+                          className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center space-x-1 bg-white px-2.5 py-1 rounded-lg border border-slate-200"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Download .txt</span>
@@ -538,10 +688,33 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                       </div>
                     </div>
 
+                    {/* Translation Error Alert */}
+                    {itemError && (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between animate-fadeIn">
+                        <div className="flex items-center space-x-2">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                          <span>{itemError}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setItemTranslateErrors((prev) => ({ ...prev, [item._id]: null }))}
+                          className="text-rose-400 hover:text-rose-600 font-bold ml-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Transcript Body (Segments or Plain Text) */}
                     {hasSegments ? (
                       <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
                         {item.segments.map((segment, idx) => {
                           const theme = getSpeakerTheme(segment.speaker);
+                          const bubbleText =
+                            currentTrans && Array.isArray(currentTrans.segments) && currentTrans.segments[idx]
+                              ? currentTrans.segments[idx]
+                              : segment.text;
+
                           return (
                             <div
                               key={idx}
@@ -565,7 +738,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                                 )}
                               </div>
                               <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-normal whitespace-pre-wrap">
-                                {segment.text}
+                                {bubbleText}
                               </p>
                             </div>
                           );
@@ -574,7 +747,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
                     ) : (
                       <div className="p-4 rounded-xl bg-white border border-slate-200 max-h-[300px] overflow-y-auto">
                         <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                          {item.text}
+                          {currentTrans?.text || item.text}
                         </p>
                       </div>
                     )}
