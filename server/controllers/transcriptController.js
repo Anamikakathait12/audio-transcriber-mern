@@ -4,6 +4,12 @@ import Transcript from '../models/Transcript.js';
 import { transcribeAudio } from '../services/transcribeService.js';
 import { diarizeAudio } from '../services/diarizeService.js';
 import { translateTexts } from '../services/translateService.js';
+import {
+  reserveQuota,
+  refundQuota,
+  reserveGlobalQuota,
+  refundGlobalQuota,
+} from '../middleware/quota.js';
 
 /**
  * Upload and transcribe an audio file with optional speaker diarization,
@@ -28,6 +34,56 @@ export const transcribe = async (req, res, next) => {
   const ALLOWED_LANGUAGES = ['auto', 'en', 'hi'];
   const rawLanguage = typeof req.body?.language === 'string' ? req.body.language.trim().toLowerCase() : '';
   const targetLanguage = ALLOWED_LANGUAGES.includes(rawLanguage) ? rawLanguage : 'auto';
+
+  // Reserve quotas atomically before performing expensive external API calls
+  let reservedTranscriptions = false;
+  let reservedUserDiarizations = false;
+  let reservedGlobalDiarizations = false;
+
+  // 1. Reserve user transcriptions quota
+  const transcriptionReservation = await reserveQuota(req.user._id, 'transcriptions');
+  if (!transcriptionReservation.success) {
+    return res.status(429).json({
+      error: `Daily limit reached (${transcriptionReservation.limit} transcriptions). Resets at 00:00 UTC.`,
+      limit: transcriptionReservation.limit,
+      used: transcriptionReservation.used,
+      remaining: transcriptionReservation.remaining,
+      resetsAt: transcriptionReservation.resetsAt,
+    });
+  }
+  reservedTranscriptions = true;
+
+  // 2. If speaker detection is requested, reserve both user and global diarization quota
+  if (shouldDetectSpeakers) {
+    const diarizationReservation = await reserveQuota(req.user._id, 'diarizations');
+    if (!diarizationReservation.success) {
+      await refundQuota(req.user._id, 'transcriptions');
+      return res.status(429).json({
+        error: `Daily limit reached (${diarizationReservation.limit} speaker detections). Resets at 00:00 UTC. You can still transcribe without speaker detection.`,
+        limit: diarizationReservation.limit,
+        used: diarizationReservation.used,
+        remaining: diarizationReservation.remaining,
+        resetsAt: diarizationReservation.resetsAt,
+        canRetryWithoutDiarization: true,
+      });
+    }
+    reservedUserDiarizations = true;
+
+    const globalReservation = await reserveGlobalQuota('diarizations');
+    if (!globalReservation.success) {
+      await refundQuota(req.user._id, 'transcriptions');
+      await refundQuota(req.user._id, 'diarizations');
+      return res.status(429).json({
+        error: `Daily global speaker detection limit reached (${globalReservation.limit} speaker detections). Resets at 00:00 UTC. You can still transcribe without speaker detection.`,
+        limit: globalReservation.limit,
+        used: globalReservation.used,
+        remaining: globalReservation.remaining,
+        resetsAt: globalReservation.resetsAt,
+        canRetryWithoutDiarization: true,
+      });
+    }
+    reservedGlobalDiarizations = true;
+  }
 
   try {
     let result;
@@ -64,6 +120,17 @@ export const transcribe = async (req, res, next) => {
       data: newTranscript,
     });
   } catch (error) {
+    // Refund reserved units on failure so user is not charged for errors
+    if (reservedTranscriptions) {
+      await refundQuota(req.user._id, 'transcriptions');
+    }
+    if (reservedUserDiarizations) {
+      await refundQuota(req.user._id, 'diarizations');
+    }
+    if (reservedGlobalDiarizations) {
+      await refundGlobalQuota('diarizations');
+    }
+
     const errorMsg = error.message || '';
     const lowerMsg = errorMsg.toLowerCase();
     if (
@@ -267,6 +334,20 @@ export const translateTranscript = async (req, res, next) => {
       });
     }
 
+    // Reserve translation quota ONLY when generating a new translation (cache hits are free)
+    let reservedTranslation = false;
+    const translationReservation = await reserveQuota(req.user._id, 'translations');
+    if (!translationReservation.success) {
+      return res.status(429).json({
+        error: `Daily limit reached (${translationReservation.limit} translations). Resets at 00:00 UTC.`,
+        limit: translationReservation.limit,
+        used: translationReservation.used,
+        remaining: translationReservation.remaining,
+        resetsAt: translationReservation.resetsAt,
+      });
+    }
+    reservedTranslation = true;
+
     let fullText = '';
     let translatedSegments = [];
 
@@ -303,6 +384,9 @@ export const translateTranscript = async (req, res, next) => {
       translation: transcript.translations[targetLang],
     });
   } catch (error) {
+    if (reservedTranslation) {
+      await refundQuota(req.user._id, 'translations');
+    }
     const statusCode = error.statusCode || error.status || 500;
     return res.status(statusCode).json({
       error: error.message || 'Translation failed. Please try again.',

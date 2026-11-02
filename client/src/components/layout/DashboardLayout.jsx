@@ -20,6 +20,7 @@ function DashboardLayout({
   detectSpeakers,
   setDetectSpeakers,
   navigate,
+  usage,
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -36,6 +37,7 @@ function DashboardLayout({
         detectSpeakers={detectSpeakers}
         setDetectSpeakers={setDetectSpeakers}
         navigate={navigate}
+        usage={usage}
       />
 
       {/* Main Content Area (offset by 240px / w-60 on lg screens) */}

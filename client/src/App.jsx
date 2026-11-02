@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { checkHealth, uploadAudio, getTranscripts } from './api/transcriptApi.js';
+import { checkHealth, uploadAudio, getTranscripts, getUsage } from './api/transcriptApi.js';
 import { useAuth } from './context/AuthContext.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
@@ -9,6 +9,7 @@ import UploadBox from './components/UploadBox.jsx';
 import Recorder from './components/Recorder.jsx';
 import TranscriptResult from './components/TranscriptResult.jsx';
 import HistoryList from './components/HistoryList.jsx';
+import UsageCard from './components/UsageCard.jsx';
 import {
   UploadCloud,
   Mic,
@@ -110,6 +111,36 @@ function App() {
   // Backend Error State
   const [backendError, setBackendError] = useState(null);
 
+  // Daily Usage Quotas State
+  const [usage, setUsage] = useState(null);
+
+  const fetchUsage = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await getUsage();
+      setUsage(data);
+    } catch (err) {
+      console.error('Failed to load usage quotas:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUsage();
+    } else {
+      setUsage(null);
+    }
+  }, [isAuthenticated]);
+
+  const isDiarizationExhausted =
+    usage?.remaining?.diarizations !== undefined && usage.remaining.diarizations <= 0;
+
+  useEffect(() => {
+    if (isDiarizationExhausted && detectSpeakers) {
+      setDetectSpeakers(false);
+    }
+  }, [isDiarizationExhausted, detectSpeakers]);
+
   // Scroll target ref for "Start transcribing" button
   const workspaceRef = useRef(null);
 
@@ -165,6 +196,7 @@ function App() {
     setCurrentTranscript(null);
     setBackendError(null);
     setRecentTranscripts([]);
+    setUsage(null);
     navigate('/login');
   };
 
@@ -199,6 +231,8 @@ function App() {
         setCurrentTranscript(response.data);
         // Automatically refresh history lists
         setHistoryRefreshTrigger((prev) => prev + 1);
+        // Refresh usage counters
+        fetchUsage();
         // Scroll to transcript result
         setTimeout(() => {
           workspaceRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -206,6 +240,10 @@ function App() {
       }
     } catch (err) {
       console.error('Transcription request failed:', err);
+      // Sync usage state if 429 quota exhausted
+      if (err.response?.status === 429) {
+        fetchUsage();
+      }
       const errorMsg =
         err.response?.data?.error ||
         err.response?.data?.message ||
@@ -313,6 +351,7 @@ function App() {
       detectSpeakers={detectSpeakers}
       setDetectSpeakers={setDetectSpeakers}
       navigate={navigate}
+      usage={usage}
     >
       {currentView === 'transcribe' ? (
         <div className="space-y-8">
@@ -423,12 +462,18 @@ function App() {
 
               {/* Tile 3: Speaker Detection */}
               <div
-                onClick={() => setDetectSpeakers(!detectSpeakers)}
-                className={`p-5 rounded-2xl border transition duration-150 cursor-pointer bg-white ${
-                  detectSpeakers
-                    ? 'border-indigo-400 ring-2 ring-indigo-500/15'
-                    : 'border-slate-200 hover:border-slate-300'
+                onClick={() => {
+                  if (isDiarizationExhausted && !detectSpeakers) return;
+                  setDetectSpeakers(!detectSpeakers);
+                }}
+                className={`p-5 rounded-2xl border transition duration-150 bg-white ${
+                  isDiarizationExhausted
+                    ? 'border-slate-200 opacity-70 cursor-not-allowed'
+                    : detectSpeakers
+                    ? 'border-indigo-400 ring-2 ring-indigo-500/15 cursor-pointer'
+                    : 'border-slate-200 hover:border-slate-300 cursor-pointer'
                 }`}
+                title={isDiarizationExhausted ? 'Daily speaker detection limit reached' : undefined}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center">
@@ -436,21 +481,30 @@ function App() {
                   </div>
                   <span
                     className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-                      detectSpeakers
+                      isDiarizationExhausted
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : detectSpeakers
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                         : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}
                   >
-                    {detectSpeakers ? 'Enabled' : 'Disabled'}
+                    {isDiarizationExhausted ? 'Limit reached' : detectSpeakers ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
                 <h3 className="text-sm font-bold text-slate-900">Speaker detection</h3>
                 <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Click to toggle AssemblyAI speaker diarization on or off.
+                  {isDiarizationExhausted
+                    ? 'Daily limit reached. Resets at 00:00 UTC.'
+                    : 'Click to toggle AssemblyAI speaker diarization on or off.'}
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Daily Usage Limits Card */}
+          {usage && (
+            <UsageCard usage={usage} />
+          )}
 
           {/* Main Transcribing Workspace */}
           <div ref={workspaceRef} className="space-y-6">
@@ -510,6 +564,7 @@ function App() {
                 uploadProgress={uploadProgress}
                 detectSpeakers={detectSpeakers}
                 setDetectSpeakers={setDetectSpeakers}
+                usage={usage}
               />
             ) : (
               <Recorder
@@ -519,6 +574,7 @@ function App() {
                 uploadProgress={uploadProgress}
                 detectSpeakers={detectSpeakers}
                 setDetectSpeakers={setDetectSpeakers}
+                usage={usage}
               />
             )}
 
@@ -527,6 +583,8 @@ function App() {
               <TranscriptResult
                 transcript={currentTranscript}
                 onClear={() => setCurrentTranscript(null)}
+                usage={usage}
+                onUsageRefresh={fetchUsage}
               />
             )}
           </div>

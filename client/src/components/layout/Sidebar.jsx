@@ -1,4 +1,5 @@
 import { Mic, FileText, Users, LogOut, X, Sparkles, AudioWaveform, ExternalLink } from 'lucide-react';
+import UsageCard from '../UsageCard.jsx';
 
 /**
  * Sidebar Component
@@ -15,6 +16,7 @@ function Sidebar({
   detectSpeakers,
   setDetectSpeakers,
   navigate,
+  usage,
 }) {
   const handleNavClick = (view) => {
     setCurrentView(view);
@@ -129,10 +131,18 @@ function Sidebar({
             <button
               type="button"
               onClick={handleSpeakerToolClick}
+              disabled={usage?.remaining?.diarizations !== undefined && usage.remaining.diarizations <= 0}
+              title={
+                usage?.remaining?.diarizations === 0
+                  ? 'Daily speaker-detection limit reached'
+                  : undefined
+              }
               className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm transition duration-150 text-left ${
                 detectSpeakers && currentView === 'transcribe'
                   ? 'bg-indigo-50/70 text-indigo-800 font-medium'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              } ${
+                usage?.remaining?.diarizations === 0 ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
               <Users className="w-4 h-4 text-indigo-600" />
@@ -162,16 +172,12 @@ function Sidebar({
           </div>
         </div>
 
-        {/* Mini Pro Tip Banner */}
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-          <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-800 mb-1">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Fast Whisper & Diarize</span>
+        {/* Today's Usage in Sidebar */}
+        {usage && (
+          <div className="pt-1">
+            <UsageCard usage={usage} compact={true} />
           </div>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            Upload up to 25 MB in MP3, WAV, M4A, WEBM, OGG, OGA, or OPUS formats.
-          </p>
-        </div>
+        )}
       </div>
 
       {/* Bottom User Profile Card */}

@@ -9,6 +9,7 @@ import connectDB from './config/db.js';
 import transcriptRoutes from './routes/transcriptRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import demoRoutes from './routes/demoRoutes.js';
+import usageRoutes from './routes/usageRoutes.js';
 
 // Load environment variables from .env
 dotenv.config();
@@ -66,6 +67,9 @@ app.use('/api/auth', authRoutes);
 
 // Public Guest Demo routes (Step 10)
 app.use('/api/demo', demoRoutes);
+
+// User Daily Quota & Usage routes (Protected)
+app.use('/api/usage', usageRoutes);
 
 // Transcript routes (Protected)
 app.use('/api/transcripts', transcriptRoutes);

@@ -29,6 +29,7 @@ function UploadBox({
   uploadProgress,
   detectSpeakers: externalDetectSpeakers,
   setDetectSpeakers: externalSetDetectSpeakers,
+  usage,
 }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [validationError, setValidationError] = useState('');
@@ -37,8 +38,16 @@ function UploadBox({
   const [language, setLanguage] = useState('auto');
   const fileInputRef = useRef(null);
 
+  // Quota status
+  const isDiarizationExhausted =
+    usage?.remaining?.diarizations !== undefined && usage.remaining.diarizations <= 0;
+  const isTranscriptionExhausted =
+    usage?.remaining?.transcriptions !== undefined && usage.remaining.transcriptions <= 0;
+
   // Allow external control if provided by parent (e.g., Quick Action Tile), otherwise internal
-  const detectSpeakers = externalDetectSpeakers !== undefined ? externalDetectSpeakers : internalDetectSpeakers;
+  const detectSpeakers =
+    !isDiarizationExhausted &&
+    (externalDetectSpeakers !== undefined ? externalDetectSpeakers : internalDetectSpeakers);
   const setDetectSpeakers = externalSetDetectSpeakers !== undefined ? externalSetDetectSpeakers : setInternalDetectSpeakers;
 
   /**
@@ -268,11 +277,12 @@ function UploadBox({
               type="button"
               role="switch"
               aria-checked={detectSpeakers}
-              onClick={() => setDetectSpeakers(!detectSpeakers)}
-              disabled={isBusy}
+              onClick={() => !isDiarizationExhausted && setDetectSpeakers(!detectSpeakers)}
+              disabled={isBusy || isDiarizationExhausted}
+              title={isDiarizationExhausted ? 'Daily speaker-detection limit reached' : undefined}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
                 detectSpeakers ? 'bg-indigo-600' : 'bg-slate-200'
-              } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${isBusy || isDiarizationExhausted ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span
                 aria-hidden="true"
@@ -284,7 +294,12 @@ function UploadBox({
           </div>
         </div>
 
-        {/* Mixed language helper text */}
+        {/* Diarization quota warning or mixed language helper text */}
+        {isDiarizationExhausted && (
+          <p className="text-[11px] text-rose-600 font-medium pt-1 border-t border-slate-200/60 leading-relaxed">
+            Daily speaker-detection limit reached. You can still transcribe audio without speaker detection.
+          </p>
+        )}
         <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 leading-relaxed">
           Auto-detect picks one language for the whole file. For mixed Hindi-English speech, choose a language manually.
         </p>
@@ -333,11 +348,17 @@ function UploadBox({
       )}
 
       {/* Transcribe Primary Button */}
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex flex-col sm:flex-row items-center justify-end gap-2">
+        {isTranscriptionExhausted && (
+          <span className="text-xs text-rose-600 font-medium">
+            Daily transcription limit reached
+          </span>
+        )}
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!selectedFile || isBusy}
+          disabled={!selectedFile || isBusy || isTranscriptionExhausted}
+          title={isTranscriptionExhausted ? 'Daily transcription limit reached' : undefined}
           className="w-full sm:w-auto px-6 py-2.5 rounded-xl font-medium text-sm text-white bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed shadow-sm transition duration-150 flex items-center justify-center space-x-2"
         >
           {isBusy ? (
@@ -345,6 +366,8 @@ function UploadBox({
               <Loader2 className="w-4 h-4 animate-spin text-white" />
               <span>{isTranscribing ? 'Transcribing...' : 'Uploading...'}</span>
             </>
+          ) : isTranscriptionExhausted ? (
+            <span>Daily Limit Reached</span>
           ) : (
             <>
               <Check className="w-4 h-4 text-indigo-300" />

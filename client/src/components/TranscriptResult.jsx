@@ -105,12 +105,16 @@ const getSpeakerTheme = (speakerNum) => {
  * Displays transcription result, metadata, chat-style speaker diarization,
  * segmented language translation switcher (Original | English | हिन्दी), and UTF-8 copy/export.
  */
-function TranscriptResult({ transcript, onClear }) {
+function TranscriptResult({ transcript, onClear, usage, onUsageRefresh }) {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState('original'); // 'original' | 'en' | 'hi'
   const [translations, setTranslations] = useState(transcript?.translations || {});
   const [translatingLang, setTranslatingLang] = useState(null); // 'en' | 'hi' | null
   const [translateError, setTranslateError] = useState(null);
+
+  // Translation quota status
+  const isTranslationExhausted =
+    usage?.remaining?.translations !== undefined && usage.remaining.translations <= 0;
 
   // Sync state if transcript prop changes
   useEffect(() => {
@@ -168,9 +172,15 @@ function TranscriptResult({ transcript, onClear }) {
           [targetId]: res.translation,
         }));
         setActiveTab(targetId);
+        // Refresh usage after successful translation
+        if (onUsageRefresh) onUsageRefresh();
       }
     } catch (err) {
       console.error('Translation failed:', err);
+      // Refresh usage in case of 429 quota exhaustion
+      if (err.response?.status === 429 && onUsageRefresh) {
+        onUsageRefresh();
+      }
       const msg =
         err.response?.data?.error ||
         err.message ||
@@ -352,16 +362,20 @@ function TranscriptResult({ transcript, onClear }) {
             const isActive = activeTab === opt.id;
             const isLoading = translatingLang === opt.id;
             const isCached = opt.id !== 'original' && Boolean(translations[opt.id]?.text);
+            const isBlocked = opt.id !== 'original' && !isCached && isTranslationExhausted;
 
             return (
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => handleTabSwitch(opt.id)}
-                disabled={translatingLang !== null}
+                onClick={() => !isBlocked && handleTabSwitch(opt.id)}
+                disabled={translatingLang !== null || isBlocked}
+                title={isBlocked ? 'Daily translation limit reached (cached translations still available)' : undefined}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition duration-150 flex items-center space-x-1.5 ${
                   isActive
                     ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                    : isBlocked
+                    ? 'text-slate-400 bg-slate-50 cursor-not-allowed opacity-60'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 } ${translatingLang !== null && !isActive ? 'opacity-60 cursor-not-allowed' : ''}`}
               >

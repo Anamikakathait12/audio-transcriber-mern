@@ -25,6 +25,7 @@ function Recorder({
   uploadProgress,
   detectSpeakers: externalDetectSpeakers,
   setDetectSpeakers: externalSetDetectSpeakers,
+  usage,
 }) {
   // 'idle' | 'recording' | 'recorded'
   const [recordingState, setRecordingState] = useState('idle');
@@ -35,7 +36,15 @@ function Recorder({
   const [internalDetectSpeakers, setInternalDetectSpeakers] = useState(false);
   const [language, setLanguage] = useState('auto');
 
-  const detectSpeakers = externalDetectSpeakers !== undefined ? externalDetectSpeakers : internalDetectSpeakers;
+  // Quota status
+  const isDiarizationExhausted =
+    usage?.remaining?.diarizations !== undefined && usage.remaining.diarizations <= 0;
+  const isTranscriptionExhausted =
+    usage?.remaining?.transcriptions !== undefined && usage.remaining.transcriptions <= 0;
+
+  const detectSpeakers =
+    !isDiarizationExhausted &&
+    (externalDetectSpeakers !== undefined ? externalDetectSpeakers : internalDetectSpeakers);
   const setDetectSpeakers = externalSetDetectSpeakers !== undefined ? externalSetDetectSpeakers : setInternalDetectSpeakers;
 
   // Native Web Audio and timer refs
@@ -343,10 +352,18 @@ function Recorder({
                 <button
                   type="button"
                   onClick={handleTranscribeRecording}
-                  className="px-6 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 shadow-sm transition duration-150 flex items-center space-x-2"
+                  disabled={isTranscriptionExhausted}
+                  title={isTranscriptionExhausted ? 'Daily transcription limit reached' : undefined}
+                  className="px-6 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-600 disabled:cursor-not-allowed shadow-sm transition duration-150 flex items-center space-x-2"
                 >
-                  <Check className="w-4 h-4 text-indigo-300" />
-                  <span>{detectSpeakers ? 'Transcribe & Detect Speakers' : 'Transcribe Recording'}</span>
+                  {isTranscriptionExhausted ? (
+                    <span>Daily Limit Reached</span>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 text-indigo-300" />
+                      <span>{detectSpeakers ? 'Transcribe & Detect Speakers' : 'Transcribe Recording'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -402,11 +419,12 @@ function Recorder({
               type="button"
               role="switch"
               aria-checked={detectSpeakers}
-              onClick={() => setDetectSpeakers(!detectSpeakers)}
-              disabled={isBusy}
+              onClick={() => !isDiarizationExhausted && setDetectSpeakers(!detectSpeakers)}
+              disabled={isBusy || isDiarizationExhausted}
+              title={isDiarizationExhausted ? 'Daily speaker-detection limit reached' : undefined}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
                 detectSpeakers ? 'bg-indigo-600' : 'bg-slate-200'
-              } ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${isBusy || isDiarizationExhausted ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span
                 aria-hidden="true"
@@ -417,6 +435,13 @@ function Recorder({
             </button>
           </div>
         </div>
+
+        {/* Diarization quota warning */}
+        {isDiarizationExhausted && (
+          <p className="text-[11px] text-rose-600 font-medium pt-1 border-t border-slate-200/60 leading-relaxed">
+            Daily speaker-detection limit reached. You can still transcribe audio without speaker detection.
+          </p>
+        )}
 
         {/* Mixed language helper text */}
         <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 leading-relaxed">

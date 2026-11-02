@@ -212,4 +212,15 @@ export const getDemoLimits = async () => {
   return response.data;
 };
 
+// ----------------- Daily Quota & Usage Endpoints ----------------- //
+
+/**
+ * Fetch daily quota usage and limits for the authenticated user.
+ * @returns {Promise<{ date: string, resetsAt: string, limits: Object, used: Object, remaining: Object }>}
+ */
+export const getUsage = async () => {
+  const response = await apiClient.get('/usage');
+  return response.data;
+};
+
 export default apiClient;
