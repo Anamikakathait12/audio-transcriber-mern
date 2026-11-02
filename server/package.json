@@ -1,7 +1,7 @@
 {
-  "name": "audio-transcriber-server",
+  "name": "audiqo-server",
   "version": "1.0.0",
-  "description": "Backend for Audio to Text Transcriber using Express, Groq Whisper API, and MongoDB Atlas",
+  "description": "Backend for Audiqo using Express, Groq Whisper API, and MongoDB Atlas",
   "main": "server.js",
   "type": "module",
   "scripts": {

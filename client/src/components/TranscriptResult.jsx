@@ -231,7 +231,7 @@ function TranscriptResult({ transcript, onClear }) {
 
     const baseName = originalFileName
       ? originalFileName.replace(/\.[^/.]+$/, '')
-      : 'transcript';
+      : 'audiqo-transcript';
     const suffix = activeTab === 'original' ? '' : `-${activeTab}`;
     link.href = url;
     link.download = `${baseName}${suffix}.txt`;

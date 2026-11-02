@@ -315,7 +315,7 @@ function HistoryList({ refreshTrigger, onTranscriptDeleted, externalSearch, setE
 
     const cleanBaseName = item.originalFileName
       ? item.originalFileName.replace(/\.[^/.]+$/, '')
-      : 'audio-transcript';
+      : 'audiqo-transcript';
     const suffix = activeTab === 'original' ? '' : `-${activeTab}`;
 
     link.href = url;

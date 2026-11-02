@@ -55,7 +55,7 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
-    message: 'Audio to Text Transcriber API is healthy',
+    message: 'Audiqo API is healthy',
     timestamp: new Date().toISOString(),
   });
 });

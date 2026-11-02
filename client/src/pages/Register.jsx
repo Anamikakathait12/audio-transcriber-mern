@@ -90,7 +90,7 @@ function Register({ onSwitchToLogin }) {
             Create an Account
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Get started with AI audio transcription & speaker diarization
+            Get started with Audiqo for speech transcription & speaker diarization
           </p>
         </div>
 

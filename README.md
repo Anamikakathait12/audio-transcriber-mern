@@ -1,6 +1,26 @@
-# 🎙️ Audio to Text Transcriber (MERN Stack)
+# 🎙️ Audiqo
 
-A modern full-stack web application that allows users to upload audio files (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`, `.oga`, `.opus`), transcribes them with high accuracy using **Groq's Whisper API** (`whisper-large-v3`), stores the transcription data in **MongoDB Atlas**, and renders the results in a reactive **React + Tailwind CSS** frontend.
+**Audiqo** is a modern full-stack speech-to-text web application that allows users to upload or record audio files (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`, `.oga`, `.opus`), transcribes them with high accuracy using **Groq's Whisper API** (`whisper-large-v3`), detects and labels distinct speakers with **AssemblyAI Diarization**, translates transcripts between English and Hindi with **Groq LLM Chat Completions**, and manages saved transcripts in a responsive **React + Tailwind CSS** SaaS dashboard.
+
+---
+
+## 📸 Screenshots
+
+### 1. Dashboard & Audio Transcriber
+![Audiqo Dashboard](docs/screenshots/dashboard.png)
+*Modern SaaS dashboard with drag-and-drop audio uploader, live microphone recorder, quick action tiles, and recent transcripts grid.*
+
+### 2. Speaker Detection (Diarization)
+![Audiqo Speaker Detection](docs/screenshots/speakers.png)
+*Automatic multi-speaker detection powered by AssemblyAI, displaying color-coded avatars, speaker labels, timestamps, and chat-style bubbles.*
+
+### 3. Transcript Translation
+![Audiqo Transcript Translation](docs/screenshots/translate.png)
+*Segmented translation switcher between English and Hindi with automatic segment alignment and instant caching.*
+
+### 4. Searchable History & Library
+![Audiqo Transcript History](docs/screenshots/history.png)
+*Searchable past transcript library with debounced filtering, pagination, expandable previews, translation badges, and UTF-8 TXT export.*
 
 ---
 
@@ -153,13 +173,13 @@ Before running the application, make sure you have:
 
 Base URL: `http://localhost:5000`
 
-### 1. Health Check
+### 1. Audiqo Server Health Check
 - **`GET /api/health`**
 - **Response `200 OK`**:
   ```json
   {
     "status": "ok",
-    "message": "Audio to Text Transcriber API is healthy",
+    "message": "Audiqo API is healthy",
     "timestamp": "2026-10-30T18:30:00.000Z"
   }
   ```

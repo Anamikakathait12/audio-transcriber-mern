@@ -61,7 +61,7 @@ function Sidebar({
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-slate-900 text-base tracking-tight">AudioTranscribe</span>
+              <span className="font-bold text-slate-900 text-base tracking-tight">Audiqo</span>
               <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200/60">
                 AI
               </span>

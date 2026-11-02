@@ -70,7 +70,7 @@ function Login({ onSwitchToRegister }) {
             <AudioWaveform className="w-6 h-6 text-indigo-400" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Welcome back
+            Welcome to Audiqo
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
             Sign in to manage and transcribe your audio recordings
