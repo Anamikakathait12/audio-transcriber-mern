@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { checkHealth, uploadAudio, getTranscripts } from './api/transcriptApi.js';
 import { useAuth } from './context/AuthContext.jsx';
+import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import DashboardLayout from './components/layout/DashboardLayout.jsx';
@@ -50,7 +51,36 @@ const formatDate = (dateString) => {
 function App() {
   // Authentication State (Step 7)
   const { user, loading: authLoading, logout, isAuthenticated } = useAuth();
-  const [authView, setAuthView] = useState('login'); // 'login' | 'register'
+
+  // SPA Route Path: '/' | '/app' | '/login' | '/register'
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname || '/');
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname || '/');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigate = (toPath) => {
+    if (window.location.pathname !== toPath) {
+      window.history.pushState({}, '', toPath);
+    }
+    setCurrentPath(toPath);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Auth routing redirects
+  useEffect(() => {
+    if (!authLoading) {
+      if (isAuthenticated && (currentPath === '/login' || currentPath === '/register')) {
+        navigate('/app');
+      } else if (!isAuthenticated && currentPath === '/app') {
+        navigate('/login');
+      }
+    }
+  }, [isAuthenticated, authLoading, currentPath]);
 
   // Server Health State (Step 1)
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'connected' | 'down'
@@ -135,6 +165,7 @@ function App() {
     setCurrentTranscript(null);
     setBackendError(null);
     setRecentTranscripts([]);
+    navigate('/login');
   };
 
   /**
@@ -216,55 +247,28 @@ function App() {
     );
   }
 
-  // ----------------- Unauthenticated View (Login / Register) ----------------- //
-  if (!isAuthenticated) {
+  // ----------------- Public Auth Views (/login, /register) ----------------- //
+  if (currentPath === '/login' || currentPath === '/register') {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-between py-12 px-4 sm:px-6 lg:px-8">
-        {/* Top Header with Server Health Check */}
-        <div className="max-w-md w-full mx-auto flex items-center justify-between pb-6">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
-              <AudioWaveform className="w-4 h-4 text-indigo-400" />
-            </div>
-            <span className="font-bold text-slate-900 text-base tracking-tight">Audiqo</span>
-          </div>
-
-          {/* Health Pill */}
-          <div
-            onClick={handleCheckHealth}
-            title="Click to check server health"
-            className="cursor-pointer flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-medium border transition duration-150 bg-white border-slate-200 hover:bg-slate-50 shadow-xs"
-          >
-            {serverStatus === 'checking' && (
-              <div className="flex items-center space-x-1 text-amber-600">
-                <RefreshCw className="w-3 h-3 animate-spin text-amber-500" />
-                <span>Connecting...</span>
-              </div>
-            )}
-            {serverStatus === 'connected' && (
-              <div className="flex items-center space-x-1.5 text-emerald-700">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span>Server Online</span>
-              </div>
-            )}
-            {serverStatus === 'down' && (
-              <div className="flex items-center space-x-1.5 text-rose-700">
-                <span className="w-2 h-2 rounded-full bg-rose-500" />
-                <span>Server Offline</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Auth Page: Login or Register */}
+      <div className="min-h-screen bg-slate-50 flex flex-col justify-between py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
+        {/* Auth Page: Login or Register with embedded top-left home link and health status */}
         <div className="flex-1 flex items-center justify-center">
-          {authView === 'login' ? (
-            <Login onSwitchToRegister={() => setAuthView('register')} />
+          {currentPath === '/login' ? (
+            <Login
+              onSwitchToRegister={() => navigate('/register')}
+              onSuccess={() => navigate('/app')}
+              onGoHome={() => navigate('/')}
+              serverStatus={serverStatus}
+              onRefreshHealth={handleCheckHealth}
+            />
           ) : (
-            <Register onSwitchToLogin={() => setAuthView('login')} />
+            <Register
+              onSwitchToLogin={() => navigate('/login')}
+              onSuccess={() => navigate('/app')}
+              onGoHome={() => navigate('/')}
+              serverStatus={serverStatus}
+              onRefreshHealth={handleCheckHealth}
+            />
           )}
         </div>
 
@@ -276,7 +280,26 @@ function App() {
     );
   }
 
-  // ----------------- Authenticated SaaS Dashboard ----------------- //
+  // ----------------- Public Landing Page (/) ----------------- //
+  if (currentPath === '/') {
+    return <Landing navigate={navigate} isAuthenticated={isAuthenticated} user={user} />;
+  }
+
+  // ----------------- Unauthenticated on /app (Protected Route) ----------------- //
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+            <AudioWaveform className="w-5 h-5 text-indigo-400 animate-pulse" />
+          </div>
+          <p className="text-sm font-medium text-slate-600">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------- Authenticated SaaS Dashboard (/app) ----------------- //
   return (
     <DashboardLayout
       currentView={currentView}
@@ -289,6 +312,7 @@ function App() {
       setSearchTerm={setSearchTerm}
       detectSpeakers={detectSpeakers}
       setDetectSpeakers={setDetectSpeakers}
+      navigate={navigate}
     >
       {currentView === 'transcribe' ? (
         <div className="space-y-8">

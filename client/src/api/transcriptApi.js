@@ -32,9 +32,12 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       const url = error.config?.url || '';
-      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+      const isPublicEndpoint =
+        url.includes('/auth/login') ||
+        url.includes('/auth/register') ||
+        url.includes('/demo/');
 
-      if (!isAuthEndpoint) {
+      if (!isPublicEndpoint) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         // Dispatch custom window event so AuthContext can cleanly reset session state
@@ -169,6 +172,43 @@ export const translateTranscript = async (id, target) => {
  */
 export const checkHealth = async () => {
   const response = await apiClient.get('/health');
+  return response.data;
+};
+
+// ----------------- Public Demo Endpoints (Step 10) ----------------- //
+
+/**
+ * Transcribe a guest audio file without an account (public demo).
+ * 
+ * @param {File} file - Audio file object
+ * @param {Function} [onProgress] - Optional upload progress callback
+ * @returns {Promise<{ text: string, language: string, duration: number|null, isDemo: boolean }>}
+ */
+export const demoTranscribe = async (file, onProgress) => {
+  const formData = new FormData();
+  formData.append('audio', file);
+
+  const response = await apiClient.post('/demo/transcribe', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percentCompleted);
+      }
+    },
+  });
+
+  return response.data;
+};
+
+/**
+ * Fetch guest demo restrictions and limits
+ * @returns {Promise<{ maxFileMb: number, maxDurationSeconds: number, recordingLimitSeconds: number, rateLimitPerHour: number, allowedFormats: string[] }>}
+ */
+export const getDemoLimits = async () => {
+  const response = await apiClient.get('/demo/limits');
   return response.data;
 };
 

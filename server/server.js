@@ -8,6 +8,7 @@ import multer from 'multer';
 import connectDB from './config/db.js';
 import transcriptRoutes from './routes/transcriptRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import demoRoutes from './routes/demoRoutes.js';
 
 // Load environment variables from .env
 dotenv.config();
@@ -62,6 +63,9 @@ app.get('/api/health', (req, res) => {
 
 // Authentication routes (Step 7)
 app.use('/api/auth', authRoutes);
+
+// Public Guest Demo routes (Step 10)
+app.use('/api/demo', demoRoutes);
 
 // Transcript routes (Protected)
 app.use('/api/transcripts', transcriptRoutes);

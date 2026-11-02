@@ -4,21 +4,45 @@
 
 ---
 
+## 🌐 Live Demo
+
+- **Frontend:** [https://audio-transcriber-mern.vercel.app](https://audio-transcriber-mern.vercel.app)
+Try it without signing up on the landing page. Sign up for speaker detection, translation and saved history.
+- **Repository:** [https://github.com/Anamikakathait12/audio-transcriber-mern](https://github.com/Anamikakathait12/audio-transcriber-mern)
+
+---
+
+## ✨ Features
+
+- **Guest demo on the landing page (no sign-up):** Whisper transcription with small file limits, no data saved.
+- **Audio Transcription:** Near real-time speech-to-text powered by Groq's Whisper API (`whisper-large-v3`).
+- **Live Microphone Recording:** In-browser audio recording with live timer, pulsing status indicator, and native playback preview.
+- **Speaker Diarization:** Multi-speaker detection, timestamps, and conversational chat-style bubbles powered by AssemblyAI.
+- **English & Hindi Translation:** Segment-aligned transcript translation powered by Groq LLM completions (`openai/gpt-oss-120b`).
+- **Searchable Transcript History:** Debounced search, pagination, and persistent storage in MongoDB Atlas.
+- **Export Options:** One-click clipboard copy and UTF-8 formatted `.txt` file downloads.
+
+---
+
 ## 📸 Screenshots
 
-### 1. Dashboard & Audio Transcriber
+### 1. Public Landing Page & Guest Demo
+![Audiqo Landing Page](docs/screenshots/landing.png)
+*Public landing page with a guest demo (no sign-up needed)*
+
+### 2. Dashboard & Audio Transcriber
 ![Audiqo Dashboard](docs/screenshots/dashboard.png)
 *Modern SaaS dashboard with drag-and-drop audio uploader, live microphone recorder, quick action tiles, and recent transcripts grid.*
 
-### 2. Speaker Detection (Diarization)
+### 3. Speaker Detection (Diarization)
 ![Audiqo Speaker Detection](docs/screenshots/speakers.png)
 *Automatic multi-speaker detection powered by AssemblyAI, displaying color-coded avatars, speaker labels, timestamps, and chat-style bubbles.*
 
-### 3. Transcript Translation
+### 4. Transcript Translation
 ![Audiqo Transcript Translation](docs/screenshots/translate.png)
 *Segmented translation switcher between English and Hindi with automatic segment alignment and instant caching.*
 
-### 4. Searchable History & Library
+### 5. Searchable History & Library
 ![Audiqo Transcript History](docs/screenshots/history.png)
 *Searchable past transcript library with debounced filtering, pagination, expandable previews, translation badges, and UTF-8 TXT export.*
 
@@ -42,6 +66,7 @@ speech-to-text/
 │   │   └── User.js               # User schema with bcrypt (12 rounds) & validation
 │   ├── routes/
 │   │   ├── authRoutes.js         # /api/auth routes with rate limiting
+│   │   ├── demoRoutes.js         # /api/demo public guest transcription & limits
 │   │   └── transcriptRoutes.js   # /api/transcripts routing (protected)
 │   ├── services/
 │   │   ├── diarizeService.js     # AssemblyAI speaker diarization client
@@ -67,15 +92,19 @@ speech-to-text/
 │   │   │   └── UploadBox.jsx     # Drag-and-drop audio uploader with validation
 │   │   ├── context/
 │   │   │   └── AuthContext.jsx   # React Auth context (JWT storage & session)
+│   │   ├── data/
+│   │   │   └── sampleTranscript.js # Pre-built 2-speaker sample transcript
 │   │   ├── pages/
+│   │   │   ├── Landing.jsx       # Public landing page with guest demo card
 │   │   │   ├── Login.jsx         # User login form with client validation
 │   │   │   └── Register.jsx      # User registration form with validation
-│   │   ├── App.jsx               # SaaS Dashboard with hero, quick actions & recent grid
+│   │   ├── App.jsx               # SPA Router & SaaS Dashboard
 │   │   ├── index.css             # Tailwind CSS directives, Google Fonts & animations
 │   │   └── main.jsx              # React DOM root entry with AuthProvider
 │   ├── index.html                # Vite HTML shell
 │   ├── package.json              # Client dependencies & scripts
 │   ├── tailwind.config.js        # Tailwind CSS configuration
+│   ├── vercel.json               # Vercel SPA rewrites configuration
 │   └── vite.config.js            # Vite build setup & backend API proxy
 │
 ├── .gitignore
@@ -139,6 +168,12 @@ Before running the application, make sure you have:
    GROQ_API_KEY=gsk_your_groq_api_key_here
    GROQ_CHAT_MODEL=openai/gpt-oss-120b
    ASSEMBLY_API_KEY=your_assemblyai_api_key_here
+   JWT_SECRET=your_jwt_secret_key_minimum_32_chars_long
+   JWT_EXPIRES_IN=7d
+   DEMO_MAX_FILE_MB=3
+   DEMO_MAX_SECONDS=90
+   DEMO_RATE_LIMIT_PER_HOUR=5
+   DEMO_DAILY_CAP=100
    ```
 
 4. Start the backend development server:
@@ -173,8 +208,27 @@ Before running the application, make sure you have:
 
 Base URL: `http://localhost:5000`
 
+### API Endpoints Overview
+
+| Endpoint | Method | Auth | Description |
+| :--- | :---: | :---: | :--- |
+| `/api/health` | `GET` | Public (no auth) | Audiqo API server health check |
+| `/api/demo/limits` | `GET` | Public (no auth) | Returns guest demo limits & allowed formats |
+| `/api/demo/transcribe` | `POST` | Public (no auth) | Guest audio transcription (Groq Whisper, no DB storage) |
+| `/api/auth/register` | `POST` | Public (no auth) | User registration returning JWT token |
+| `/api/auth/login` | `POST` | Public (no auth) | User login returning JWT token |
+| `/api/auth/me` | `GET` | Bearer Token | Current authenticated user info |
+| `/api/transcripts` | `POST` | Bearer Token | Transcribe audio & save to user library |
+| `/api/transcripts` | `GET` | Bearer Token | List saved transcripts (search & pagination) |
+| `/api/transcripts/:id` | `GET` | Bearer Token | Fetch single transcript details |
+| `/api/transcripts/:id` | `DELETE` | Bearer Token | Delete transcript from user library |
+| `/api/transcripts/:id/translate` | `POST` | Bearer Token | Translate transcript to English or Hindi |
+
+---
+
 ### 1. Audiqo Server Health Check
 - **`GET /api/health`**
+- **Auth:** Public (no auth)
 - **Response `200 OK`**:
   ```json
   {
@@ -186,8 +240,49 @@ Base URL: `http://localhost:5000`
 
 ---
 
-### 2. Transcribe Audio
+### 2. Guest Demo Limits
+- **`GET /api/demo/limits`**
+- **Auth:** Public (no auth)
+- **Response `200 OK`**:
+  ```json
+  {
+    "maxFileMb": 3,
+    "maxDurationSeconds": 90,
+    "recordingLimitSeconds": 60,
+    "rateLimitPerHour": 5,
+    "allowedFormats": ["mp3", "wav", "m4a", "webm", "ogg", "oga", "opus"]
+  }
+  ```
+
+---
+
+### 3. Guest Demo Audio Transcription
+- **`POST /api/demo/transcribe`**
+- **Auth:** Public (no auth)
+- **Content-Type:** `multipart/form-data`
+- **Body:**
+  - `audio`: Audio file (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`, `.oga`, or `.opus`)
+- **Guest Limits & Safeguards (configured via environment variables):**
+  - **Max File Size:** Enforced by `DEMO_MAX_FILE_MB` (default `3` MB)
+  - **Max Duration:** Enforced by `DEMO_MAX_SECONDS` (default `90` seconds; rejected with `400 Bad Request` if duration exceeds limit)
+  - **Rate Limit:** Enforced by `DEMO_RATE_LIMIT_PER_HOUR` (default `5` requests per hour per IP)
+  - **Daily Global Cap:** Enforced by `DEMO_DAILY_CAP` (default `100` transcriptions per day in memory, resets at midnight UTC)
+  - **Privacy:** Processed temp file is deleted immediately in a `finally` block; audio and transcripts are never saved to MongoDB.
+- **Response `200 OK`**:
+  ```json
+  {
+    "text": "Transcribed text from guest audio.",
+    "language": "english",
+    "duration": 14.5,
+    "isDemo": true
+  }
+  ```
+
+---
+
+### 4. Transcribe Audio (Members)
 - **`POST /api/transcripts`**
+- **Headers:** `Authorization: Bearer <token>`
 - **Content-Type:** `multipart/form-data`
 - **Body:**
   - `audio`: Audio file (`.mp3`, `.wav`, `.m4a`, `.webm`, `.ogg`, `.oga`, or `.opus`, max **25 MB**)
@@ -209,8 +304,9 @@ Base URL: `http://localhost:5000`
 
 ---
 
-### 3. List All Transcripts (Search & Pagination)
+### 5. List All Transcripts (Search & Pagination)
 - **`GET /api/transcripts?search=keyword&page=1&limit=10`**
+- **Headers:** `Authorization: Bearer <token>`
 - **Query Parameters:**
   - `search` *(optional)*: Case-insensitive search match across transcript text and original file name.
   - `page` *(optional, default: 1)*: Page number.
@@ -237,8 +333,9 @@ Base URL: `http://localhost:5000`
 
 ---
 
-### 4. Get Transcript by ID
+### 6. Get Transcript by ID
 - **`GET /api/transcripts/:id`**
+- **Headers:** `Authorization: Bearer <token>`
 - **Response `200 OK`**:
   ```json
   {
@@ -262,8 +359,9 @@ Base URL: `http://localhost:5000`
 
 ---
 
-### 5. Delete Transcript by ID
+### 7. Delete Transcript by ID
 - **`DELETE /api/transcripts/:id`**
+- **Headers:** `Authorization: Bearer <token>`
 - **Response `200 OK`**:
   ```json
   {
@@ -274,10 +372,10 @@ Base URL: `http://localhost:5000`
 
 ---
 
-### 6. Translate Transcript
+### 8. Translate Transcript
 - **`POST /api/transcripts/:id/translate`**
-- **Headers**: `Authorization: Bearer <token>`
-- **Body**:
+- **Headers:** `Authorization: Bearer <token>`
+- **Body:**
   ```json
   {
     "target": "en"
@@ -329,4 +427,5 @@ The backend has built-in global error-handling for upload and validation edge ca
 - [x] **Step 7:** User authentication & ownership (JWT auth, bcrypt 12 rounds, rate limiting, protected user routes, login/register views, session restoration).
 - [x] **Step 8:** UI redesign into a clean SaaS dashboard (Slate-50 light theme, Inter + Instrument Serif typography, fixed left sidebar, mobile drawer, sticky topbar with global search & health pill, gradient hero, 3 quick action tiles, 6-card recent grid, and soft pastel speaker styling).
 - [x] **Step 9:** Transcript translation (Groq LLM chat completions with `GROQ_CHAT_MODEL`, English & Hindi translation, JSON array batching & alignment, cached translations, segmented switcher in UI, speaker chat-bubble text swapping, UTF-8 download, and history badges).
+- [x] **Step 10:** Public landing page & guest demo (Landing page at `/`, guest transcription endpoint `/api/demo/transcribe`, rate & duration limits, sample result preview, comparison table, and FAQ).
 

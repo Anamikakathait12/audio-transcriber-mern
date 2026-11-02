@@ -1,13 +1,40 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Lock, Mail, Eye, EyeOff, Loader2, AudioWaveform, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, Loader2, AudioWaveform, ArrowRight, ArrowLeft, RefreshCw } from 'lucide-react';
+
+/**
+ * SPA Link helper that navigates to a route without reloading or external dependencies
+ */
+const Link = ({ to, children, className, 'aria-label': ariaLabel, onClick, onNavigate, ...props }) => {
+  return (
+    <a
+      href={to}
+      aria-label={ariaLabel}
+      className={className}
+      onClick={(e) => {
+        e.preventDefault();
+        if (onClick) {
+          onClick(e);
+        } else if (onNavigate) {
+          onNavigate(to);
+        } else {
+          window.history.pushState({}, '', to);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      }}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+};
 
 /**
  * Login Page Component
  * Restyled for clean SaaS light theme: centered white card on slate-50,
  * dark navy button, crisp inputs, and friendly error feedback.
  */
-function Login({ onSwitchToRegister }) {
+function Login({ onSwitchToRegister, onSuccess, onGoHome, serverStatus, onRefreshHealth }) {
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -49,6 +76,9 @@ function Login({ onSwitchToRegister }) {
     setLoading(true);
     try {
       await login(email.trim(), password);
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (err) {
       console.error('Login error:', err);
       const message =
@@ -63,10 +93,75 @@ function Login({ onSwitchToRegister }) {
 
   return (
     <div className="w-full max-w-md mx-auto">
+      {/* Top Header Row above the card */}
+      <div className="flex items-center justify-between pb-4 px-0.5">
+        {/* Top-left: Audiqo logo + name link to "/" with visible focus ring and aria-label */}
+        <Link
+          to="/"
+          onNavigate={onGoHome}
+          aria-label="Go to Audiqo home"
+          className="inline-flex items-center space-x-2 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 hover:opacity-80 transition duration-150 p-1"
+        >
+          <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+            <AudioWaveform className="w-4 h-4 text-indigo-400" />
+          </div>
+          <span className="font-bold text-slate-900 text-base tracking-tight">Audiqo</span>
+        </Link>
+
+        {/* Server Online Status Badge */}
+        {serverStatus && (
+          <div
+            onClick={onRefreshHealth}
+            title="Click to check server health"
+            className="cursor-pointer flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-medium border transition duration-150 bg-white border-slate-200 hover:bg-slate-50 shadow-xs"
+          >
+            {serverStatus === 'checking' && (
+              <div className="flex items-center space-x-1 text-amber-600">
+                <RefreshCw className="w-3 h-3 animate-spin text-amber-500" />
+                <span>Connecting...</span>
+              </div>
+            )}
+            {serverStatus === 'connected' && (
+              <div className="flex items-center space-x-1.5 text-emerald-700">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>Server Online</span>
+              </div>
+            )}
+            {serverStatus === 'down' && (
+              <div className="flex items-center space-x-1.5 text-rose-700">
+                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                <span>Server Offline</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Small "Back to home" text button just above the card */}
+      <div className="mb-3 flex items-center justify-start">
+        <Link
+          to="/"
+          onNavigate={onGoHome}
+          className="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition duration-150 rounded-lg py-1 px-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
+        >
+          <ArrowLeft className="w-3.5 h-3.5 text-slate-500" />
+          <span>Back to home</span>
+        </Link>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 p-7 sm:p-9 animate-fadeIn transition-all duration-150">
         {/* Header Branding */}
         <div className="text-center mb-7">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-3.5 shadow-sm">
+          <div
+            onClick={onGoHome}
+            className={`w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-3.5 shadow-sm ${
+              onGoHome ? 'cursor-pointer hover:bg-slate-800 transition' : ''
+            }`}
+            title={onGoHome ? 'Back to Audiqo home' : undefined}
+          >
             <AudioWaveform className="w-6 h-6 text-indigo-400" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">

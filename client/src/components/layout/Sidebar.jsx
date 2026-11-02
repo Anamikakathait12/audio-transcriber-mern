@@ -1,4 +1,4 @@
-import { Mic, FileText, Users, LogOut, X, Sparkles, AudioWaveform } from 'lucide-react';
+import { Mic, FileText, Users, LogOut, X, Sparkles, AudioWaveform, ExternalLink } from 'lucide-react';
 
 /**
  * Sidebar Component
@@ -14,6 +14,7 @@ function Sidebar({
   setMobileOpen,
   detectSpeakers,
   setDetectSpeakers,
+  navigate,
 }) {
   const handleNavClick = (view) => {
     setCurrentView(view);
@@ -55,7 +56,13 @@ function Sidebar({
     <div className="flex flex-col h-full bg-white border-r border-slate-200">
       {/* Brand Header */}
       <div className="h-16 px-5 flex items-center justify-between border-b border-slate-200">
-        <div className="flex items-center space-x-2.5">
+        <div
+          onClick={() => {
+            if (navigate) navigate('/app');
+            else handleNavClick('transcribe');
+          }}
+          className="flex items-center space-x-2.5 cursor-pointer"
+        >
           <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
             <AudioWaveform className="w-5 h-5 text-indigo-400" />
           </div>
@@ -136,6 +143,22 @@ function Sidebar({
                 AssemblyAI
               </span>
             </button>
+
+            {navigate && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/');
+                  setMobileOpen(false);
+                }}
+                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm transition duration-150 text-left text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              >
+                <ExternalLink className="w-4 h-4 text-slate-500" />
+                <div className="flex-1 min-w-0">
+                  <span className="block truncate">Public landing page</span>
+                </div>
+              </button>
+            )}
           </div>
         </div>
 
